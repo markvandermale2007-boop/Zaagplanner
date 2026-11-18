@@ -77,12 +77,17 @@ function scrKoppeling() {
           <button data-act="kpstart" data-v="hier">Die van dit apparaat houden →<small>dit apparaat heeft de juiste prijzen; ze gaan naar de gedeelde opslag</small></button></div>`}
       ${kp.bezig ? '<p class="muted">Bezig met koppelen…</p>' : ''}`);
   // timer-app: adres met koppelcode (adres + openbare sleutel; inloggen doet elke gebruiker zelf)
-  const basis = location.href.replace(/[^/]*([?#].*)?$/, ''), link = ing ? basis + 'timer.html#k=' + ZP.cloud.code() : '';
+  // vanaf schijf geopend: het webadres (bv. GitHub Pages) zelf invullen, anders kan de telefoon er niet bij
+  const opSchijf = /^file:/.test(location.protocol), web = (c.web || '').trim();
+  const kpBasis = (u) => u.replace(/[?#].*$/, '').replace(/[^/]*\.html?$/i, '').replace(/\/?$/, '/');   // map van de app, altijd met / aan het eind
+  const basis = opSchijf ? (web ? kpBasis(web) : '') : location.href.replace(/[^/]*([?#].*)?$/, '');
+  const link = ing && basis ? basis + 'timer.html#k=' + ZP.cloud.code() : '';
   const s4 = !ing ? '' : `<section class="card kp-timer"><div class="ml-head"><h3>Timer-app voor de werkplaats</h3><span class="muted small">op de telefoon tijden bijhouden per onderdeel</span></div>
     <div class="kp-qr-rij"><div id="kp-qr" class="kp-qr" data-link="${esc(link)}"></div><div>
       <p>Scan de code met de telefoon (of open de link), log in en zet de app op het beginscherm. Projecten met de status <b>${ZP.werk.IN_WERK.join('</b>, <b>')}</b> staan in de timer-app.</p>
-      ${/^file:/.test(location.protocol) ? '<div class="warn small">De Zaagplanner is nu vanaf de schijf geopend (file://). Een telefoon kan daar niet bij: zet de map op een webadres (https), zie KOPPELEN.md.</div>' : ''}
-      <p class="small"><a href="${esc(link)}" target="_blank" rel="noopener">${esc(basis)}timer.html</a></p>
+      ${opSchijf ? `<label class="small">Webadres van de app (GitHub Pages) <input data-bind="kpweb" class="w16" value="${esc(web)}" placeholder="https://<naam>.github.io/Zaagplanner/"></label>
+        ${web ? '' : '<div class="warn small">De Zaagplanner is vanaf de schijf geopend. Vul hierboven het webadres in waar de map online staat (zie KOPPELEN.md), dan klopt de QR-code.</div>'}` : ''}
+      ${link ? `<p class="small"><a href="${esc(link)}" target="_blank" rel="noopener">${esc(basis)}timer.html</a></p>` : ''}
       <label class="small">Koppelcode (voor een andere laptop of telefoon) <input readonly class="w16" value="${esc(ZP.cloud.code())}" onclick="this.select()"></label></div></div></section>`;
   return pageHead('Koppeling', 'Werk op meerdere laptops en met meerdere mensen aan dezelfde projecten, en houd in de werkplaats tijden bij met de timer-app. Zonder internet werk je gewoon door; bij verbinding wordt alles bijgewerkt.') + `
     ${kp.fout ? `<div class="warn">${esc(kp.fout)}</div>` : ''}${s1}${s2}${s3}${s4}${gestart ? kpMetingenKaart() : ''}`;
@@ -149,6 +154,7 @@ CHANGE.push(function change_koppeling(b, t) {
     case 'kpurl': ZP.cloud.zetCfg({ url: t.value.trim() }); break;
     case 'kpkey': ZP.cloud.zetCfg({ key: t.value.trim() }); break;
     case 'kpnaam': ZP.cloud.zetCfg({ naam: t.value.trim() }); kpMeld(); render(); return 'skip';
+    case 'kpweb': ZP.cloud.zetCfg({ web: t.value.trim() }); render(); return 'skip';
     case 'kpcode': if (!t.value.trim()) return 'skip'; if (!ZP.cloud.uitCode(t.value)) { kp.fout = 'Dit is geen geldige koppelcode.'; render(); return 'skip'; } kp.fout = ''; break;
     case 'kptelt': { const m = (kp.metingen || []).find(x => String(x.id) === t.dataset.id); if (m) { m.telt = t.checked; ZP.cloud.backend.metingZet(m.id, { telt: t.checked }).catch(e => { kp.metFout = e.message; }); } render(); return 'skip'; }
     default: return false;
