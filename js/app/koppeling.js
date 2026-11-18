@@ -57,7 +57,7 @@ function scrKoppeling() {
   const stap = (n, titel, klaar, body) => `<section class="card kp-stap ${klaar ? 'klaar' : ''}"><div class="ml-head"><span class="scode">${klaar ? '✓' : n}</span><h3>${titel}</h3></div>${body}</section>`;
   const s1 = stap(1, 'Gedeelde opslag instellen', ing, `<p class="muted small">Eén keer per apparaat. Het adres en de openbare sleutel staan in Supabase bij <i>Project Settings › API</i> (zie KOPPELEN.md). Op een tweede laptop kun je ook de koppelcode van de eerste plakken.</p>
     <div class="tar-grid"><label>Adres (Project URL) <input data-bind="kpurl" value="${esc(c.url || '')}" placeholder="https://….supabase.co"></label>
-      <label>Openbare sleutel (anon public key) <input data-bind="kpkey" value="${esc(c.key || '')}" placeholder="eyJ…"></label>
+      <label>Openbare sleutel (Publishable key, niet de secret key) <input data-bind="kpkey" value="${esc(c.key || '')}" placeholder="sb_publishable_…"></label>
       <label>Of: koppelcode van een ander apparaat <input data-bind="kpcode" value="" placeholder="plak hier de koppelcode"></label>
       <label>Naam van deze gebruiker / dit apparaat <input data-bind="kpnaam" value="${esc(c.naam || '')}" placeholder="bv. Tim – kantoor"></label></div>`);
   const s2 = !ing ? '' : stap(2, 'Inloggen', !!kp.gebruiker, kp.gebruiker

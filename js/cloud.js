@@ -8,12 +8,14 @@ ZP.cloud = (function () {
   const KEY = 'zaagplanner.koppeling', LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
   const lees = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const cfg = () => lees(KEY, {});
-  const zetCfg = (o) => { const c = Object.assign(cfg(), o); try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { /* geen opslag */ } sb = null; return c; };
+  // alleen het begin van het adres (https://xxx.supabase.co): uit "Data API" komt vaak .../rest/v1/ mee → "Invalid path specified in request URL"
+  const basisUrl = (u) => { try { return new URL(String(u).trim()).origin; } catch (e) { return String(u || '').trim(); } };
+  const zetCfg = (o) => { if (o && o.url) o = Object.assign({}, o, { url: basisUrl(o.url) }); const c = Object.assign(cfg(), o); try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { /* geen opslag */ } sb = null; return c; };
   // elk apparaat (browser) een eigen kenmerk, om eigen wijzigingen te herkennen
   const apparaat = () => { let a = null; try { a = localStorage.getItem('zaagplanner.apparaat'); if (!a) { a = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('zaagplanner.apparaat', a); } } catch (e) { a = 'tijdelijk'; } return a; };
   const ingesteld = () => { const c = cfg(); return !!(c.url && c.key); };
   // koppelcode voor een ander apparaat (adres + openbare sleutel; geen wachtwoord): in de link of QR-code van de timer-app
-  const code = () => { const c = cfg(); return c.url && c.key ? btoa(c.url + '|' + c.key) : ''; };
+  const code = () => { const c = cfg(); return c.url && c.key ? btoa(basisUrl(c.url) + '|' + c.key.trim()) : ''; };
   function uitCode(s) { try { const [url, key] = atob(String(s).trim()).split('|'); if (/^https:\/\//.test(url) && key) { zetCfg({ url, key }); return true; } } catch (e) { /* geen geldige code */ } return false; }
 
   let sb = null, libP = null;
@@ -26,7 +28,7 @@ ZP.cloud = (function () {
     if (sb) return sb;
     const c = cfg(); if (!c.url || !c.key) throw new Error('De koppeling is nog niet ingesteld.');
     await laadLib();
-    sb = window.supabase.createClient(c.url.replace(/\/+$/, ''), c.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'zaagplanner.sessie' } });
+    sb = window.supabase.createClient(basisUrl(c.url), c.key.trim(), { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'zaagplanner.sessie' } });
     return sb;
   }
   const fout = (e) => { if (e) throw new Error(e.message || String(e)); };
