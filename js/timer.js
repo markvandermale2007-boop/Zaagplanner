@@ -217,6 +217,7 @@ ZP.timer = (function () {
       teken(); vernieuw();
     }
     async function vernieuw() {
+      if (!C.ingesteld() || ['koppel', 'inloggen', 'naam', 'laden'].includes(ui.scherm)) return;   // nog niet gekoppeld/ingelogd
       try { await T.haalProjecten(); ui.fout = ''; } catch (e) { ui.fout = st().projecten.length ? 'Geen verbinding – lijst van ' + (st().opgehaald ? new Date(st().opgehaald).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'eerder') + '.' : 'Projecten ophalen lukt niet: ' + e.message; }
       await stuur(); teken();
     }
