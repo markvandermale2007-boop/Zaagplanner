@@ -102,9 +102,12 @@ main { padding: 28px 34px 60px; max-width: 1480px; }
 .uv-links { min-width: 0; } .uv-links .card { overflow: hidden; }
 .uv-tbl { table-layout: fixed; width: 100%; } .uv-tbl td select, .uv-tbl th select { width: 100%; min-width: 0; max-width: 100%; }
 .uv-tbl.typemat th:first-child { width: 30%; } .uv-tbl td, .uv-tbl th { overflow-wrap: anywhere; }
-.uv-trappen { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -4px 0 14px; }
-.uv-trappen .prtab .scode { width: 22px; height: 22px; font-size: 12px; margin-right: 6px; }
-.uv-trapinfo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* "Trappen wijken van elkaar af": vinkje en een kaart per trap met de trapletter in de kop */
+.uv-apart { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.uv-trapkaart { border-left: 4px solid var(--accent, #b07a3c); }
+.uv-trapkop { color: var(--accent); }
+.uv-vloerbal { margin: 8px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--surface-2); border-radius: 6px; }
+.uv-vloerbal h4 { margin: 0 0 6px; color: var(--accent); }
 .uv-spijl .uv-staal { height: 70px; background: var(--surface-2); display: grid; place-items: center; } .uv-spijl .uv-staal svg, .uv-spijl .uv-staal img { max-height: 66px; max-width: 100%; }
 .uv-rij { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
 .uv-rij:first-of-type { border-top: 0; }

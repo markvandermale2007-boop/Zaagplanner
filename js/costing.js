@@ -212,6 +212,17 @@ ZP.cost = (function () {
     const same = !!t && cfg.spijl === t.spijl && cfg.tussen === (+t.tussen || 100) && cfg.onderslof === !!t.onderslof;
     return { t, cfg, same, vast: same ? t.vast : null, vastKost: same ? t.vastKost : null };
   }
+  // balustrades per verdieping anders (B.balApart, Uitvoering): keuze B.balVloer[vloernaam] = {type, spijl, hout, afw}
+  // geldt voor balustraderegels "op de verdieping" (sleutel = bl.vloer, '' = zonder naam). Type = samenstelling van dat type,
+  // spijl gaat daar nog voor. Hout en afwerking komen op de specificatiestaat (de prijs per meter rekent met het spijltype).
+  function balVloerVan(B, bl) { return B && B.balApart && bl.plaats === 'verdieping' ? ((B.balVloer || {})[bl.vloer || ''] || null) : null; }
+  function balEffectief(B, bl) {
+    const o = balVloerVan(B, bl); if (!o) return bl;
+    const e = Object.assign({}, bl);
+    if (o.type) { e.type = o.type; delete e.spijl; delete e.tussen; delete e.onderslof; }
+    if (o.spijl) e.spijl = o.spijl;
+    return e;
+  }
   // standaard balustrade (app): standaardspijltje, tussenruimte en onderslof per plaats (op de boom / op de verdieping)
   function balStdVan(C) {
     const sps = C.spijltypes || [];
@@ -471,11 +482,11 @@ ZP.cost = (function () {
     const extraLeun = B.leun.map(l => ({ l, L: leunLine('leun:' + l.id, 'Leuning – ' + l.profiel.toLowerCase(), l, { fixedQty: +l.m || 0, extra: { leuning: l, extraLeun: l } }, false) }));
     const hasBal = inc.some(x => x.type === 'baluster');
     for (const bl of B.bal) {
-      const r = balRegel(C, bl), pm = balustradePerM(C, r.cfg, bl.plaats);
+      const ov = balVloerVan(B, bl), r = balRegel(C, balEffectief(B, bl)), pm = balustradePerM(C, r.cfg, bl.plaats);
       const bv = check(C, r.vast, pm.kost - pm.plaatsen, r.vastKost);
       // spijlhout zit al in de inkooplijst als de balusters getekend en ingedeeld zijn
       const matM = (houtUitIndeling && hasBal ? 0 : pm.matSp) + pm.slofMat;
-      line(s2, 'bal:' + bl.id, 'Balustrade – ' + (bl.vloer ? bl.vloer + ' – ' : bl.kant ? bl.kant + ' – ' : '') + pm.spijl.naam, { fixedQty: +bl.m || 0, unit: 'm', u: pm.uren, mat: matM, vast: bv, extra: { bal: bl, cfg: r.cfg, spijl: pm.spijl },
+      line(s2, 'bal:' + bl.id, 'Balustrade – ' + (bl.vloer ? bl.vloer + ' – ' : bl.kant ? bl.kant + ' – ' : '') + pm.spijl.naam, { fixedQty: +bl.m || 0, unit: 'm', u: pm.uren, mat: matM, vast: bv, extra: { bal: bl, cfg: r.cfg, spijl: pm.spijl, vloerKeuze: ov },
         note: `norm: maken + afwerken (grondverven) met ${pm.spijlStd.naam.toLowerCase()} · ${f1(pm.perM)} spijlen/m · tussenruimte ${r.cfg.tussen} mm${r.cfg.onderslof ? ' · met onderslof' : ''}${r.t ? ' · ' + (r.same ? 'volgens ' + r.t.naam : 'eigen samenstelling') : ''}${bv ? ` · vaste prijs ${eur(bv.vast)}/m excl. plaatsen · kostprijs ${eur(pm.kost - pm.plaatsen)}/m · marge ${f1(bv.marge * 100)}%` : ` · kostprijs ${eur(pm.kost - pm.plaatsen)}/m excl. plaatsen`}` });
       // ander spijltje dan standaard: meerprijs per stuk (zonder norm, geen opslag)
       if (pm.meer && !bv) { const n = Math.ceil(pm.perM * (+bl.m || 0));
@@ -485,7 +496,7 @@ ZP.cost = (function () {
     // standaardspijltje = meerprijs per stuk, net als bij een balustrade per meter
     { const nTek = inc.filter(x => x.type === 'baluster').length, std = balStdVan(C), sp = B.spijl && C.spijltypes.find(s => s.id === B.spijl);
       if (nTek && sp && sp.id !== std.spijl && +sp.meer > 0) line(s2, 'balmeer:tek', `Meerprijs getekende spijltjes – ${sp.naam}`, { fixedQty: nTek, unit: 'stuks', vast: { vast: +sp.meer }, edit: false, extra: { spijl: sp }, note: `${eur(sp.meer)} per stuk t.o.v. het standaardspijltje` }); }
-    const nSpijl = B.bal.reduce((a, bl) => a + balustradePerM(C, balRegel(C, bl).cfg).perM * (+bl.m || 0), 0);
+    const nSpijl = B.bal.reduce((a, bl) => a + balustradePerM(C, balRegel(C, balEffectief(B, bl)).cfg).perM * (+bl.m || 0), 0);
     const leunTot = leunM + B.leun.reduce((a, l) => a + (+l.m || 0), 0);
 
     // 3. speciale bewerkingen (eventueel tegen vaste prijs per eenheid)
@@ -755,5 +766,5 @@ ZP.cost = (function () {
   function normHerstel(C, lijst) { for (const [pad, v] of lijst) { const r = normRef(C, pad), e = (C.normBron || {})[pad]; if (!r || !e) continue; e.excel = r[0][r[1]] === undefined ? null : r[0][r[1]]; r[0][r[1]] = v; } }
   const normBronVan = (C, pad) => (C.normBron || {})[pad] || null;
 
-  return { afwGemeten, normGet, normSet, normTerug, normBewaar, normHerstel, normBronVan, NS, houtFactor, defaults, ensure, TRAPTYPES, VORMEN, PROFIELEN, STATUS, tredeU, tredeSoortU, afwU, afwVanStuk, afwVanPart, geenAfw, isVerdreven, boomU, boomTredU, leuningU, bewKost, afwMat, afwPrijs, leuningPerM, leunKey, leunHoutVan, balRegel, balustradePerM, balStdVan, balStdPrijs, check, signalen, setVast, guessType, begroting, importXlsx, uid };
+  return { afwGemeten, normGet, normSet, normTerug, normBewaar, normHerstel, normBronVan, NS, houtFactor, defaults, ensure, TRAPTYPES, VORMEN, PROFIELEN, STATUS, tredeU, tredeSoortU, afwU, afwVanStuk, afwVanPart, geenAfw, isVerdreven, boomU, boomTredU, leuningU, bewKost, afwMat, afwPrijs, leuningPerM, leunKey, leunHoutVan, balRegel, balVloerVan, balEffectief, balustradePerM, balStdVan, balStdPrijs, check, signalen, setVast, guessType, begroting, importXlsx, uid };
 })();

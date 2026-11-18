@@ -310,8 +310,10 @@ function specGroepen(p, r) {
   // zonder aantal (wens gebruiker): alleen welke dragers, bij de muurleuning
   for (const l of L('drager')) lrows.push(['Leuningdragers', `${(c.dragers.find(d => d.id === B.drager.id) || {}).naam || l.label.replace(/^Leuningdragers – /, '')} (bij de muurleuning)`]);
   if (!L('drager').length) for (const l of lines.filter(l => l.key.startsWith('bs:') && /muurleuninghouder/i.test(l.label) && +l.qty > 0)) lrows.push(['Leuningdragers', `${l.label} (bij de muurleuning)`]);
-  for (const l of L('bal')) { const g = l.extra.cfg, sp = l.extra.spijl;
-    lrows.push([l.label.replace(/ – [^–]*$/, '').replace(/^Balustrade – /, 'Balustrade ') || 'Balustrade', `spijl ${sp.naam.toLowerCase()} · tussenruimte ${g.tussen} mm${g.onderslof ? ' · met onderslof' : ''} · ${getal(l.qty)} m`, DW.spijl(sp, 'thumb')]); }
+  for (const l of L('bal')) { const g = l.extra.cfg, sp = l.extra.spijl, vk = l.extra.vloerKeuze || {};
+    // balustrade per verdieping anders: eigen houtsoort / afwerking van die verdieping erbij
+    const eigen = [vk.hout, vk.afw && (c.afwerkingen.find(a => a.id === vk.afw) || {}).naam].filter(Boolean).map(x => ' · ' + x).join('');
+    lrows.push([l.label.replace(/ – [^–]*$/, '').replace(/^Balustrade – /, 'Balustrade ') || 'Balustrade', `spijl ${sp.naam.toLowerCase()} · tussenruimte ${g.tussen} mm${g.onderslof ? ' · met onderslof' : ''}${eigen} · ${getal(l.qty)} m`, DW.spijl(sp, 'thumb')]); }
   // getekende spijltjes (balusters in de tekening): het gekozen spijltype (Uitvoering), anders het standaardspijltje
   if (inc.some(x => x.type === 'baluster')) { const sp = c.spijltypes.find(s => s.id === B.spijl) || c.spijltypes.find(s => s.id === CO.balStdVan(c).spijl);
     if (sp) lrows.push(['Spijltjes', `${sp.naam} · ${inc.filter(x => x.type === 'baluster').length * 1} stuks`, DW.spijl(sp, 'thumb')]); }

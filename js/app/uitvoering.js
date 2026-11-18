@@ -25,18 +25,13 @@ function scrUitvoering() {
   const pur = purchaseOf(p), r = CO.begroting(c, p, pur, pur ? null : houtSchatting(p));
   // met de opstelling aan (trappen, vloeren, wanden tekenen) krijgt de 3D-kaart de volle breedte
   const breed = !!(p.opstelling && p.opstelling.aan);
-  // meerdere trappen: tabbladen "Hele project" + per trap (ui.uvTrap). Per trap: eigen houtsoort en afwerking (de trappen
-  // in één project kunnen verschillen); de rest (leuning, opties, varianten) staat bij "Hele project".
-  const sid = p.stairs.length > 1 && p.stairs.some(s => s.id === ui.uvTrap) ? ui.uvTrap : '';
-  const trapBalk = p.stairs.length > 1 ? `<div class="uv-trappen no-print" role="tablist" aria-label="Trappen in dit project">
-    <button class="prtab ${sid ? '' : 'on'}" role="tab" aria-selected="${!sid}" data-act="uvtrap" data-v="">Hele project</button>
-    ${p.stairs.map(s => `<button class="prtab ${sid === s.id ? 'on' : ''}" role="tab" aria-selected="${sid === s.id}" data-act="uvtrap" data-v="${s.id}"><span class="scode">${stairCode(p, s.id)}</span>${esc(s.name)}${uvTrapWijkt(p, s.id) ? ' <span title="Deze trap heeft eigen keuzes">●</span>' : ''}</button>`).join('')}</div>` : '';
+  // standaard één kaart "Per onderdeel" voor het hele project; met het vinkje "Trappen wijken van elkaar af"
+  // (B.trappenApart, alleen bij meer dan één trap) krijgt elke trap een eigen kaart met dezelfde opbouw.
+  const apart = uvApart(p);
   return pageHead('Uitvoering', 'Waar de trap van gemaakt wordt en hoe hij eruit komt te zien. Kies bovenaan in één keer; daaronder kun je per onderdeel, per kant en per stuk afwijken. Wat uit de tekening komt staat er al en kun je zelf overrulen.') + `
-    ${trapBalk}
     ${breed ? view3dCard(p, c) : ''}
     <div class="uv-grid"><div class="uv-links">
-      ${sid ? uvTrapKaart(p, sid) + uvSnel(p, r, sid) + uvOnderdelen(p, r, sid) + uvStukken(p, r, sid)
-        : uvKoppelKaart(p) + uvSnel(p, r, '') + uvOnderdelen(p, r, '') + uvStukken(p, r, '') + uvTekening(p, r) + uvLeuning(p, r) + uvOpties(p, r) + bvCard(p, r)}
+      ${uvKoppelKaart(p) + uvSnel(p, r) + (apart ? p.stairs.map(s => uvOnderdelen(p, r, s.id)).join('') : uvOnderdelen(p, r, '')) + uvStukken(p, r) + uvTekening(p, r) + uvLeuning(p, r) + uvOpties(p, r) + bvCard(p, r)}
     </div><aside class="uv-rechts">${breed ? '' : view3dCard(p, c)}${uvPrijs(p, r)}</aside></div>`;
 }
 
@@ -46,6 +41,21 @@ const uvIncVan = (p, sid) => uvInc(p).filter(x => !sid || x.stair === sid);
 const uvTypesVan = (p, sid) => [...new Set(uvIncVan(p, sid).map(x => x.type))].sort((a, b) => P.TYPES[a].order - P.TYPES[b].order);
 // heeft deze trap eigen keuzes (houtsoort of afwerking anders dan het project)?
 const uvTrapWijkt = (p, sid) => Object.keys(p.typeMaterial || {}).some(k => k.startsWith('s:' + sid + '|')) || Object.keys((((p.begroting || {}).afwTrap) || {})[sid] || {}).length > 0;
+// staat "Trappen wijken van elkaar af" aan? Oude projecten (nog nooit gekozen) met keuzes per trap: aan.
+const uvApart = (p) => { if (p.stairs.length < 2) return false; const a = (p.begroting || {}).trappenApart; return a === undefined ? p.stairs.some(s => uvTrapWijkt(p, s.id)) : !!a; };
+// vinkje uit: de keuzes per trap gaan opzij (B.trapBewaard) zodat ze niet meer meetellen; weer aan = terugzetten
+function uvApartZet(p, aan) {
+  const B = p.begroting = p.begroting || {}, tm = p.typeMaterial = p.typeMaterial || {};
+  B.trappenApart = !!aan;
+  if (aan) { const w = B.trapBewaard; if (!w) return '';
+    Object.assign(tm, w.tm || {}); B.afwTrap = Object.assign(B.afwTrap || {}, w.afw || {}); delete B.trapBewaard;
+    return 'De eerdere keuzes per trap staan er weer.'; }
+  const ks = Object.keys(tm).filter(k => k.startsWith('s:')), afw = B.afwTrap || {};
+  if (!ks.length && !Object.keys(afw).length) return '';
+  B.trapBewaard = { tm: Object.fromEntries(ks.map(k => [k, tm[k]])), afw };
+  for (const k of ks) delete tm[k]; B.afwTrap = {};
+  return 'Nu geldt overal de keuze voor het hele project. De keuzes per trap zijn bewaard: vink weer aan om ze terug te krijgen.';
+}
 // trappen die boven elkaar staan horen bij elkaar (stair.boven = de trap eronder): samen op één tekeningblad
 function uvBovenOpts(p, s) {
   const boven = (id) => p.stairs.find(x => x.boven === id);          // de trap die óp trap id staat
@@ -55,56 +65,59 @@ function uvBovenOpts(p, s) {
 const uvBovenSel = (p, s) => `<select data-bind="sboven" data-s="${s.id}" class="${s.boven ? 'set' : ''}" title="Staat deze trap boven een andere trap (bv. de zoldertrap boven de verdiepingstrap)? Dan komen ze samen op één tekeningblad, boven elkaar in 3D en in het aanzicht.">${opts(uvBovenOpts(p, s), s.boven || '')}</select>`;
 function uvKoppelKaart(p) {
   if (p.stairs.length < 2) return '';
+  const apart = uvApart(p), bewaard = !apart && (p.begroting || {}).trapBewaard;
   return `<section class="card uv-koppel"><div class="ml-head"><h3>Trappen in dit project</h3><span class="muted small">staan trappen boven elkaar (bv. verdiepingstrap en zoldertrap)? Koppel ze: dan staan ze samen op één tekeningblad</span></div>
-    <table class="tbl compact uv-tbl"><tbody>${p.stairs.map(s => `<tr><th><span class="scode">${stairCode(p, s.id)}</span> ${esc(s.name)}</th><td>${uvBovenSel(p, s)}</td>
-      <td><button class="small" data-act="uvtrap" data-v="${s.id}">Houtsoort en afwerking van deze trap${uvTrapWijkt(p, s.id) ? ' ●' : ''} →</button></td></tr>`).join('')}</tbody></table></section>`;
-}
-function uvTrapKaart(p, sid) {
-  const s = stairOf(p, sid), n = uvIncVan(p, sid).length;
-  return `<section class="card uv-koppel"><div class="uv-trapinfo"><span class="scode">${stairCode(p, sid)}</span><h3>${esc(s.name)}</h3><span class="muted small">${n} onderdelen · keuzes hier gelden alleen voor deze trap</span>
-    <label class="small">Staat ${uvBovenSel(p, s)}</label>
-    ${uvTrapWijkt(p, sid) ? `<button class="small ghost" data-act="uvtrapreset" data-v="${sid}" title="Alle eigen keuzes van deze trap weghalen">↺ Zoals het hele project</button>` : ''}</div></section>`;
+    <table class="tbl compact uv-tbl"><tbody>${p.stairs.map(s => `<tr><th><span class="scode">${stairCode(p, s.id)}</span> ${esc(s.name)}</th><td>${uvBovenSel(p, s)}</td></tr>`).join('')}</tbody></table>
+    <label class="uv-apart"><input type="checkbox" data-bind="uvapart" ${apart ? 'checked' : ''}> <b>Trappen wijken van elkaar af</b>
+      <span class="muted small">${apart ? 'elke trap heeft hieronder een eigen kaart met houtsoort en afwerking' : 'aanvinken als de trappen een andere houtsoort of afwerking krijgen: dan per trap een eigen kaart'}${bewaard ? ' · er zijn eerdere keuzes per trap bewaard' : ''}</span></label></section>`;
 }
 
-// ---------- snelkeuze: alles in één houtsoort / één afwerking (hele project of één trap) ----------
-function uvSnel(p, r, sid) {
-  const c = C(), B = p.begroting, lijst = uvIncVan(p, sid), nu = new Set(lijst.map(x => hoWood(uvHoutVan(p, x))));
+// ---------- snelkeuze: alles in één houtsoort / één afwerking (hele project; eigen keuzes per trap en per stuk vervallen) ----------
+function uvSnel(p, r) {
+  const c = C(), B = p.begroting, lijst = uvInc(p), nu = new Set(lijst.map(x => hoWood(uvHoutVan(p, x))));
   const afwNu = new Set(lijst.map(x => CO.afwVanPart(c, B, x)).filter(Boolean));
-  const eenHout = nu.size === 1 ? [...nu][0] : null, eenAfw = afwNu.size === 1 ? [...afwNu][0] : null, ds = `data-s="${esc(sid || '')}"`;
+  const eenHout = nu.size === 1 ? [...nu][0] : null, eenAfw = afwNu.size === 1 ? [...afwNu][0] : null, alle = uvApart(p) ? ' van alle trappen' : '';
   const houten = [...new Set([...hoHoutsoorten(), ...nu].map(hoWood))].filter(w => w && w !== '(onbekend)').sort((a, b) => a.localeCompare(b));
-  return `<section class="card uv-snel"><div class="ml-head"><h3>Snelkeuze${sid ? ' voor deze trap' : ''}</h3><span class="muted small">één tik zet alle onderdelen${sid ? ' van deze trap' : ''}; afwijken kan hieronder</span></div>
+  return `<section class="card uv-snel"><div class="ml-head"><h3>Snelkeuze</h3><span class="muted small">één tik zet alle onderdelen${alle}; afwijken kan hieronder</span></div>
     <div class="uv-rij"><div class="uv-lab">Houtsoort<small>${eenHout ? 'alles in ' + esc(eenHout) : esc([...nu].join(' + '))}</small></div>
-      <div class="uv-tegels">${houten.map(w => uvTegel('uvhout', w, eenHout === w, w, nu.has(w) && !eenHout ? 'deels' : '', fotoVan('hout', w), uvKleur(w), ds)).join('')}</div></div>
+      <div class="uv-tegels">${houten.map(w => uvTegel('uvhout', w, eenHout === w, w, nu.has(w) && !eenHout ? 'deels' : '', fotoVan('hout', w), uvKleur(w))).join('')}</div></div>
     <div class="uv-rij"><div class="uv-lab">Afwerking<small>${eenAfw ? esc(uvAfwNaam(eenAfw)) : 'verschillend per onderdeel'}</small></div>
-      <div class="uv-tegels">${c.afwerkingen.map(a => uvTegel('uvafw', a.id, eenAfw === a.id, a.naam, afwNu.has(a.id) && !eenAfw ? 'deels' : '', fotoVan('afw', a.id), DW.woodColor(eenHout || [...nu][0] || 'Eiken', a.naam).f, ds)).join('')}</div></div></section>`;
+      <div class="uv-tegels">${c.afwerkingen.map(a => uvTegel('uvafw', a.id, eenAfw === a.id, a.naam, afwNu.has(a.id) && !eenAfw ? 'deels' : '', fotoVan('afw', a.id), DW.woodColor(eenHout || [...nu][0] || 'Eiken', a.naam).f)).join('')}</div></div></section>`;
 }
 
 // ---------- per soort onderdeel (en per kant): houtsoort + afwerking ----------
 function uvOnderdelen(p, r, sid) {
-  const st = S(), tm = p.typeMaterial || {}, c = C(), types = uvTypesVan(p, sid), fk = 'bg-hout', B = p.begroting;
+  const st = S(), tm = p.typeMaterial || {}, c = C(), types = uvTypesVan(p, sid), fk = sid ? 'bg-hout-' + sid : 'bg-hout', B = p.begroting;
   const nu = (t) => [...new Set(uvIncVan(p, sid).filter(x => x.type === t).map(x => hoWood(uvHoutVan(p, x))))].join(' / ');
-  const head = `<div class="ml-head">${foldBtn(fk, 'Per onderdeel')}<h3>Per onderdeel${sid ? ' – trap ' + stairCode(p, sid) : ''}</h3><span class="muted small">${esc(types.map(t => P.TYPES[t].label + ': ' + nu(t)).join(' · '))}</span></div>`;
-  if (folded(fk)) return `<section class="card bhout">${head}</section>`;
-  // één trap: per soort kiezen of hij het project volgt of een eigen houtsoort / afwerking krijgt
+  const s = sid && stairOf(p, sid);
+  const titel = s ? `Trap ${stairCode(p, sid)} – ${esc(s.name)}` : 'Per onderdeel';
+  const head = `<div class="ml-head">${foldBtn(fk, s ? 'Trap ' + stairCode(p, sid) : 'Per onderdeel')}<h3 class="${s ? 'uv-trapkop' : ''}">${titel}</h3><span class="muted small">${esc(types.map(t => P.TYPES[t].label + ': ' + nu(t)).join(' · '))}</span></div>`;
+  if (folded(fk)) return `<section class="card bhout${s ? ' uv-trapkaart' : ''}" ${s ? `data-s="${sid}"` : ''}>${head}</section>`;
+  // één trap (vinkje "Trappen wijken van elkaar af"): per soort de eigen houtsoort / afwerking van deze trap; leeg = standaard
   if (sid) {
-    const at = (B.afwTrap || {})[sid] || {};
-    const rijT = (t) => { const lijst = uvIncVan(p, sid).filter(x => x.type === t), eigenH = tm['s:' + sid + '|' + t] || '', eigenA = at[t] || '';
-      const alg = tm[t] ? hoWood(tm[t]) : 'volgens tekening', algA = uvAfwNaam(uvAfwVan(r, t)) || '–';
+    const at = (B.afwTrap || {})[sid] || {}, lijstT = uvIncVan(p, sid);
+    const rijT = (t) => { const lijst = lijstT.filter(x => x.type === t), eigenH = tm['s:' + sid + '|' + t] || '', eigenA = at[t] || '';
+      const drawn = [...new Set(lijst.map(x => M.canonMaterial(x.material, st.materialMap) || '(onbekend)'))].join(' / ');
+      const alg = tm[t] ? hoWood(tm[t]) : 'volgens tekening: ' + drawn, algA = uvAfwNaam(uvAfwVan(r, t)) || '–';
+      const kanten = Object.keys(tm).filter(k => k.startsWith('s:' + sid + '|' + t + '|')).sort();
       return `<tr><th><span class="tdot t-${t}"></span>${P.TYPES[t].label} <span class="count">${lijst.length}</span></th>
-        <td><select data-bind="uvtrapmat" data-s="${sid}" data-t="${t}" class="${eigenH ? 'set' : ''}"><option value="">zoals het hele project (${esc(alg)})</option>${houtMatOpts(eigenH)}</select></td>
-        <td><select data-bind="uvtrapafw" data-s="${sid}" data-t="${t}" class="${eigenA ? 'set' : ''}">${opts([['', `zoals het hele project (${algA})`]].concat(c.afwerkingen.map(a => [a.id, a.naam])), eigenA)}</select></td></tr>`; };
-    return `<section class="card bhout">${head}${isStale(p) ? `<div class="warn stale">Houtsoort gewijzigd: de indeling (planken en inkoop) hoort nog bij de oude keuze. <button class="small" data-act="bcalc">Indeling opnieuw berekenen</button></div>` : ''}
+        <td><select data-bind="uvtrapmat" data-s="${sid}" data-t="${t}" class="${eigenH ? 'set' : ''}"><option value="">standaard (${esc(alg)})</option>${houtMatOpts(eigenH)}</select></td>
+        <td><select data-bind="uvtrapafw" data-s="${sid}" data-t="${t}" class="${eigenA ? 'set' : ''}">${opts([['', `standaard (${algA})`]].concat(c.afwerkingen.map(a => [a.id, a.naam])), eigenA)}</select></td></tr>`
+        + kanten.map(k => `<tr class="bhout-kant"><th><span class="muted small">${esc(P.TYPES[t].label)} ${esc(k.split('|')[2].toLowerCase())}</span></th><td><select data-bind="uvtrapmatk" data-v="${esc(k)}">${houtMatOpts(tm[k])}</select>
+          <button class="ghost small" data-act="uvtrapkantdel" data-v="${esc(k)}" title="Zelfde houtsoort als de andere ${esc(P.TYPES[t].label.toLowerCase())} van deze trap">✕</button></td><td></td></tr>`).join(''); };
+    const kantOptsT = types.flatMap(t => [...new Set(lijstT.filter(x => x.type === t && x.side).map(x => x.side))].map(z => ['s:' + sid + '|' + t + '|' + z, `${P.TYPES[t].label} ${z.toLowerCase()}`])).filter(([k]) => !(k in tm));
+    return `<section class="card bhout uv-trapkaart" data-s="${sid}">${head}${isStale(p) ? `<div class="warn stale">Houtsoort gewijzigd: de indeling (planken en inkoop) hoort nog bij de oude keuze. <button class="small" data-act="bcalc">Indeling opnieuw berekenen</button></div>` : ''}
       <table class="tbl compact typemat uv-tbl"><thead><tr><th>Onderdeel</th><th>Houtsoort</th><th>Afwerking</th></tr></thead><tbody>${types.map(rijT).join('')}</tbody></table>
-      <p class="muted small">Met de oranje rand = eigen keuze voor deze trap. De specificatiestaat en de tekening van deze trap volgen deze keuzes.</p></section>`;
+      ${kantOptsT.length ? `<div class="row wrap small uv-kantadd"><span class="muted">Per kant afwijken:</span> <select id="uv-kant-${sid}">${opts(kantOptsT)}</select> <select id="uv-kanthout-${sid}">${houtMatOpts('')}</select> <button class="small" data-act="uvtrapkantadd" data-v="${sid}">+ Eigen houtsoort voor deze kant</button></div>` : ''}
+      <p class="muted small">Geldt alleen voor trap ${stairCode(p, sid)}. Oranje rand = eigen keuze; "standaard" = zoals bij de snelkeuze of de tekening. De specificatiestaat en de tekening van deze trap volgen deze keuzes.
+        ${uvTrapWijkt(p, sid) ? `<button class="small ghost" data-act="uvtrapreset" data-v="${sid}" title="Alle eigen keuzes van deze trap weghalen">↺ Alles standaard</button>` : ''}</p></section>`;
   }
-  // trappen die voor een soort afwijken van het project
-  const wijkt = (t) => p.stairs.filter(s => tm['s:' + s.id + '|' + t] || ((B.afwTrap || {})[s.id] || {})[t]).map(s => stairCode(p, s.id));
   const nEigen = (t) => uvStuks(p).filter(x => x.type === t && (tm['id:' + uvBase(x.id)] || ((p.begroting || {}).afwStuk || {})[uvBase(x.id)])).length;
   const rij = (t) => {
     const lijst = uvInc(p).filter(x => x.type === t);
     const drawn = [...new Set(lijst.map(x => M.canonMaterial(x.material, st.materialMap) || '(onbekend)'))].join(' / ');
     const kanten = Object.keys(tm).filter(k => k.startsWith(t + '|')).sort(), afw = uvAfwVan(r, t), ne = nEigen(t);
-    return `<tr><th><span class="tdot t-${t}"></span>${P.TYPES[t].label} <span class="count">${lijst.length}</span>${ne ? `<div class="uv-eigen small" title="Stukken met een eigen keuze, zie Per stuk">● ${ne} ${ne === 1 ? 'stuk wijkt' : 'stuks wijken'} af</div>` : ''}${wijkt(t).length ? `<div class="uv-eigen small" title="Deze trap heeft een eigen keuze: zie het tabblad van die trap">● trap ${wijkt(t).join(', ')} wijkt af</div>` : ''}</th>
+    return `<tr><th><span class="tdot t-${t}"></span>${P.TYPES[t].label} <span class="count">${lijst.length}</span>${ne ? `<div class="uv-eigen small" title="Stukken met een eigen keuze, zie Per stuk">● ${ne} ${ne === 1 ? 'stuk wijkt' : 'stuks wijken'} af</div>` : ''}</th>
         <td><select data-bind="typemat" data-v="${t}" class="${tm[t] ? 'set' : ''}"><option value="">volgens tekening (${esc(drawn)})</option>${houtMatOpts(tm[t] || '')}</select></td>
         <td>${afw ? `<select data-bind="bafw" data-k="${t}" class="${((p.begroting || {}).afw || {})[t] ? 'set' : ''}">${opts(c.afwerkingen.map(a => [a.id, a.naam]), afw)}</select>` : '<span class="muted small">—</span>'}</td></tr>`
       + kanten.map(k => `<tr class="bhout-kant"><th><span class="muted small">${esc(P.TYPES[t].label)} ${esc(k.split('|').slice(1).join(' vlucht '))}</span></th><td><select data-bind="typematk" data-v="${esc(k)}">${houtMatOpts(tm[k])}</select>
@@ -121,9 +134,9 @@ function uvOnderdelen(p, r, sid) {
 }
 
 // ---------- per stuk: elk onderdeel apart aanpasbaar ----------
-function uvStukken(p, r, sid) {
+function uvStukken(p, r) {
   const fk = 'open:uv-stuk', B = p.begroting || {}, tm = p.typeMaterial || {}, c = C(), sel = ui.sel3d;
-  const stuks = uvStuks(p).filter(x => !sid || x.stair === sid), eigen = (x) => { const b = uvBase(x.id); return !!(tm['id:' + b] || (B.afwStuk || {})[b] || (B.boomVormen || {})['id:' + b] || (B.verdreven || {})[b]); };
+  const stuks = uvStuks(p), eigen = (x) => { const b = uvBase(x.id); return !!(tm['id:' + b] || (B.afwStuk || {})[b] || (B.boomVormen || {})['id:' + b] || (B.verdreven || {})[b]); };
   const nE = stuks.filter(eigen).length, selParts = stuks.filter(x => sel.has(x.id));
   const head = `<div class="ml-head">${foldBtn(fk, 'Per stuk')}<h3>Per stuk</h3><span class="muted small">${nE ? `● ${nE} ${nE === 1 ? 'stuk heeft' : 'stuks hebben'} een eigen keuze` : 'elk onderdeel apart aanpassen: houtsoort, afwerking, recht/gebogen, recht/verdreven'}${selParts.length ? ` · ${selParts.length} geselecteerd` : ''}</span></div>`;
   if (folded(fk) && !selParts.length) return `<section class="card uv-stuk">${head}</section>`;
@@ -185,10 +198,13 @@ function uvLeuning(p, r) {
           : `<select data-bind="uvleunvorm" class="${B.leuning.auto ? '' : 'set'}" title="Recht of gebogen: per leuningstuk uit de tekening, of zelf kiezen voor alle leuningen">${opts([['auto', 'vorm uit tekening'], ...CO.VORMEN.map(v => [v, v])], B.leuning.auto ? 'auto' : B.leuning.vorm)}</select>`}
           <select data-bind="bleun" data-id="${id}" data-f="hout" title="Houtsoort (prijs per meter)">${opts(c.leuningHout, l.hout)}</select>` : `<span class="muted small">${esc(l.profiel)} · ${esc(l.vorm)} · ${esc(l.hout || '')}</span>`}
       ${x ? ` <input class="w4 num" data-bind="bleun" data-id="${id}" data-f="m" value="${String(x.m || '').replace('.', ',')}"> m <label class="small" title="Geen ophangen bij montage voor deze leuning"><input type="checkbox" data-bind="uvleunzelf" data-id="${id}" ${x.zelf ? 'checked' : ''}> klant hangt zelf op</label> <button class="ghost small" data-act="bleundel" data-v="${id}" title="Weghalen">✕</button>` : ''}</td></tr>`; };
-  const balRij = (L) => { const b = L.extra.bal, g = L.extra.cfg, id = b.id;
-    return `<tr><th>${esc(L.label)}</th><td><div class="row wrap small balline"><label>Spijl <select data-bind="bbal" data-id="${id}" data-f="spijl">${opts(c.spijltypes.map(s => [s.id, s.naam]), g.spijl)}</select></label>
+  const balRij = (L) => { const b = L.extra.bal, g = L.extra.cfg, id = b.id, vk = L.extra.vloerKeuze;
+    // per verdieping gekozen type of spijl: hier alleen tonen (wijzigen bij de verdieping hierboven)
+    const samen = vk && (vk.type || vk.spijl) ? `<span class="muted" title="Gekozen bij de verdieping hierboven">spijl ${esc(L.extra.spijl.naam.toLowerCase())} · ${g.tussen} mm${g.onderslof ? ' · onderslof' : ''} (per verdieping)</span>`
+      : `<label>Spijl <select data-bind="bbal" data-id="${id}" data-f="spijl">${opts(c.spijltypes.map(s => [s.id, s.naam]), g.spijl)}</select></label>
       <label>tussenruimte <input class="w3 num" data-bind="bbal" data-id="${id}" data-f="tussen" value="${g.tussen}"> mm</label>
-      <label><input type="checkbox" data-bind="bbal" data-id="${id}" data-f="onderslof" ${g.onderslof ? 'checked' : ''}> onderslof</label>
+      <label><input type="checkbox" data-bind="bbal" data-id="${id}" data-f="onderslof" ${g.onderslof ? 'checked' : ''}> onderslof</label>`;
+    return `<tr><th>${esc(L.label)}</th><td><div class="row wrap small balline">${samen}
       <select data-bind="bbal" data-id="${id}" data-f="plaats">${opts([['boom', 'op de boom'], ['verdieping', 'op de verdieping']], b.plaats || 'boom')}</select>
       <input class="w4 num" data-bind="bbal" data-id="${id}" data-f="m" value="${String(b.m || '').replace('.', ',')}"> m <label title="Geen plaatsen bij montage voor deze balustrade"><input type="checkbox" data-bind="uvbalzelf" data-id="${id}" ${b.zelf ? 'checked' : ''}> klant plaatst zelf</label> <button class="ghost small" data-act="bbaldel" data-v="${id}" title="Weghalen">✕</button></div></td></tr>`; };
   const dr = B.drager && c.dragers.find(d => d.id === B.drager.id);
@@ -196,7 +212,7 @@ function uvLeuning(p, r) {
   const stdSp = CO.balStdVan(c).spijl, gekozen = c.spijltypes.some(s => s.id === B.spijl) ? B.spijl : stdSp, nTek = uvInc(p).filter(x => x.type === 'baluster').length;
   const spijlRij = c.spijltypes.length ? `<div class="uv-rij uv-spijl"><div class="uv-lab">Spijltje<small>${nTek ? nTek + ' getekend' : 'in de balustrade'}</small></div>
     <div class="uv-tegels">${c.spijltypes.map(s => `<button class="uv-tegel ${gekozen === s.id ? 'on' : ''}" data-act="uvspijl" data-v="${s.id}" aria-pressed="${gekozen === s.id}" title="${esc(s.naam)}"><span class="uv-staal">${DW.spijl(s, 'thumb')}</span><b>${esc(s.naam)}</b><small>${s.id === stdSp ? 'standaard' : +s.meer > 0 ? '+ ' + eur(s.meer) + ' per stuk' : ''}</small></button>`).join('')}</div></div>` : '';
-  return `<section class="card uv-leun">${head}${spijlRij}
+  return `<section class="card uv-leun">${head}${spijlRij}${uvBalVloeren(p, bal)}
     <table class="tbl compact uv-tbl"><tbody>${leun.map(leunRij).join('')}
       <tr><th>Leuningdragers<div class="muted small">alleen bij een muurleuning</div></th><td><select data-bind="uvdrager">${opts([['', 'standaard (muurleuninghouder uit het beslag)']].concat(c.dragers.map(d => [d.id, `${d.naam} (${eur(d.prijs)})`])), dr ? dr.id : '')}</select></td></tr>
       ${bal.map(balRij).join('')}
@@ -206,6 +222,29 @@ function uvLeuning(p, r) {
       <input class="w4 num" id="bl-m" placeholder="meter"> m <button class="small" data-act="bleunadd">+ Leuning</button> <span class="muted small">bv. een muurleuning die niet getekend is</span></div>
     <div class="uv-add"><b class="small">Balustrade toevoegen</b> <select id="bb-type">${opts([['', 'Eigen samenstelling (spijl daarna kiezen)']].concat(c.balustrades.map(b => [b.id, `${b.naam} – ${eur(b.vast > 0 ? b.vast : CO.balustradePerM(c, b).kost)}/m${b.vast > 0 ? ' (vast)' : ''}`])), (c.balustrades[0] || {}).id)}</select>
       <input class="w4 num" id="bb-m" placeholder="meter"> m <select id="bb-pl">${opts([['boom', 'op de boom'], ['verdieping', 'op de verdieping']])}</select> <button class="small" data-act="bbaladd">+ Balustrade</button></div></section>`;
+}
+
+// ---------- balustrades per verdieping anders (B.balApart, B.balVloer[vloernaam] = {type, spijl, hout, afw}) ----------
+// standaard één keuze voor het hele project (spijltje hierboven, houtsoort/afwerking van de balusters); aangevinkt = per verdieping een blok
+function uvBalVloeren(p, bal) {
+  const c = C(), B = p.begroting, vloeren = [...new Set(bal.filter(l => l.extra.bal.plaats === 'verdieping').map(l => l.extra.bal.vloer || ''))];
+  if (!vloeren.length) return '';
+  const aan = !!B.balApart, kies = B.balVloer || {};
+  const vink = `<label class="uv-apart"><input type="checkbox" data-bind="uvbalapart" ${aan ? 'checked' : ''}> <b>Balustrades per verdieping anders</b>
+    <span class="muted small">${aan ? 'elke verdieping heeft hieronder een eigen keuze; leeg = zoals het hele project' : 'aanvinken als een verdieping een ander type, spijltje, houtsoort of afwerking krijgt'}</span></label>`;
+  if (!aan) return vink;
+  const houten = [...new Set(hoHoutsoorten().map(hoWood))].filter(w => w && w !== '(onbekend)').sort((a, b) => a.localeCompare(b));
+  const tmB = (p.typeMaterial || {}).baluster, stdHout = tmB ? hoWood(tmB) : 'zoals de spijltjes';
+  const sel = (vl, f, lijst, std) => { const w = (kies[vl] || {})[f] || '';
+    return `<select data-bind="uvbalv" data-vl="${esc(vl)}" data-f="${f}" class="${w ? 'set' : ''}">${opts([['', std]].concat(lijst), w)}</select>`; };
+  const blok = (vl) => { const m = bal.filter(l => l.extra.bal.plaats === 'verdieping' && (l.extra.bal.vloer || '') === vl).reduce((a, l) => a + (+l.qty || 0), 0);
+    return `<div class="uv-vloerbal" data-vl="${esc(vl)}"><h4>${esc(vl || 'Verdieping (zonder naam)')} <span class="muted small">${f1(m)} m balustrade</span></h4>
+      <div class="row wrap small">
+        <label>Type ${sel(vl, 'type', c.balustrades.map(b => [b.id, b.naam]), 'standaard samenstelling')}</label>
+        <label>Spijltje ${sel(vl, 'spijl', c.spijltypes.map(s => [s.id, s.naam]), 'standaard')}</label>
+        <label>Houtsoort ${sel(vl, 'hout', houten.map(w => [w, w]), 'standaard (' + stdHout + ')')}</label>
+        <label>Afwerking ${sel(vl, 'afw', c.afwerkingen.map(a => [a.id, a.naam]), 'standaard')}</label></div></div>`; };
+  return vink + vloeren.map(blok).join('');
 }
 
 // ---------- opties: speciale bewerkingen als tegels (aan/uit), met aantal en "alleen als optie op de offerte" ----------
@@ -242,18 +281,15 @@ CLICK.push(function click_uitvoering(a, t, v, p) {
   if (!p) return false; const B = p.begroting = p.begroting || {};
   switch (a) {
     // alles in één houtsoort: keuzes per soort, per kant en per stuk worden vervangen; de leuning (prijs per meter) gaat mee
-    case 'uvtrap': ui.uvTrap = v || ''; ui.sel3d = new Set(); render(); window.scrollTo(0, 0); return;
-    // eigen keuzes van één trap weghalen: volgt weer het hele project
+    // eigen keuzes van één trap weghalen: volgt weer de standaard
     case 'uvtrapreset': { const tm = p.typeMaterial || {}; for (const k of Object.keys(tm)) if (k.startsWith('s:' + v + '|')) delete tm[k]; if (B.afwTrap) delete B.afwTrap[v]; break; }
+    // houtsoort voor één kant van één trap (sleutel s:<trap>|<soort>|<kant>)
+    case 'uvtrapkantadd': { const k = (document.getElementById('uv-kant-' + v) || {}).value, w = (document.getElementById('uv-kanthout-' + v) || {}).value; if (!k || !w) return;
+      (p.typeMaterial = p.typeMaterial || {})[k] = w; break; }
+    case 'uvtrapkantdel': delete (p.typeMaterial || {})[v]; break;
     // spijltype voor de getekende spijltjes en alle balustrades
     case 'uvspijl': { B.spijl = v; for (const bl of B.bal || []) { if (bl.spijl === undefined) Object.assign(bl, CO.balRegel(C(), bl).cfg); bl.spijl = v; } break; }
-    case 'uvhout': if (t.dataset.s) {
-      // alleen deze trap: eigen houtsoort per soort (sleutel s:<trap>|<soort>); keuzes per stuk van deze trap vervallen
-      const sid = t.dataset.s, tm = p.typeMaterial = p.typeMaterial || {};
-      for (const x of uvIncVan(p, sid)) delete tm['id:' + uvBase(x.id)];
-      for (const ty of uvTypesVan(p, sid)) tm['s:' + sid + '|' + ty] = v;
-      ui.msg = { text: `Trap ${stairCode(p, sid)}: alles in ${v}.`, kind: 'ok' }; break;
-    } else {
+    case 'uvhout': {
       const oud = Object.keys(p.typeMaterial || {}).filter(k => k.includes('|') || k.startsWith('id:')).length;
       p.typeMaterial = Object.fromEntries(uvTypes(p).map(x => [x, v]));
       const lh = (C().leuningHout || []).find(h => h.toLowerCase() === hoWood(v).toLowerCase());
@@ -261,11 +297,7 @@ CLICK.push(function click_uitvoering(a, t, v, p) {
       for (const x of uvTypes(p)) cfHoutNaarVariant(p, x, v);
       ui.msg = { text: `Alles in ${v}${oud ? ` (${oud} eigen ${oud === 1 ? 'keuze' : 'keuzes'} per kant of per stuk vervangen)` : ''}.`, kind: 'ok' }; break;
     }
-    case 'uvafw': if (t.dataset.s) {
-      const sid = t.dataset.s; (B.afwTrap = B.afwTrap || {})[sid] = Object.fromEntries(uvTypesVan(p, sid).map(x => [x, v]));
-      for (const x of uvIncVan(p, sid)) if (B.afwStuk) delete B.afwStuk[uvBase(x.id)];
-      ui.msg = { text: `Trap ${stairCode(p, sid)}: alles ${uvAfwNaam(v).toLowerCase()}.`, kind: 'ok' }; break;
-    } else { const n = Object.keys(B.afwStuk || {}).length + Object.keys(B.afwTrap || {}).length; B.afw = Object.assign({ treden: v, rest: v }, Object.fromEntries(uvTypes(p).map(x => [x, v]))); B.afwStuk = {}; B.afwTrap = {};
+    case 'uvafw': { const n = Object.keys(B.afwStuk || {}).length + Object.keys(B.afwTrap || {}).length; B.afw = Object.assign({ treden: v, rest: v }, Object.fromEntries(uvTypes(p).map(x => [x, v]))); B.afwStuk = {}; B.afwTrap = {};
       ui.msg = { text: `Alles ${uvAfwNaam(v).toLowerCase()}${n ? ` (${n} eigen ${n === 1 ? 'keuze' : 'keuzes'} per stuk vervangen)` : ''}.`, kind: 'ok' }; break; }
     case 'uvkantadd': { const k = (document.getElementById('uv-kant') || {}).value, w = (document.getElementById('uv-kanthout') || {}).value; if (!k || !w) return;
       (p.typeMaterial = p.typeMaterial || {})[k] = w; cfKantNaarVariant(p, k, w); break; }
@@ -288,6 +320,12 @@ CHANGE.push(function change_uitvoering(b, t, p) {
     case 'uvselalle': { for (const x of uvStuks(p).filter(y => y.type === t.dataset.t)) { if (t.checked) ui.sel3d.add(x.id); else ui.sel3d.delete(x.id); } render(); return 'skip'; }
     // houtsoort / afwerking van één soort onderdeel voor één trap (leeg = zoals het hele project)
     case 'uvtrapmat': { const tm = p.typeMaterial = p.typeMaterial || {}, k = 's:' + t.dataset.s + '|' + t.dataset.t; if (t.value) tm[k] = t.value; else delete tm[k]; break; }
+    // balustrades per verdieping: uit = keuzes blijven bewaard maar tellen niet mee (costing balVloerVan kijkt naar B.balApart)
+    case 'uvbalapart': if (t.checked) B.balApart = true; else delete B.balApart; break;
+    case 'uvbalv': { const k = B.balVloer = B.balVloer || {}, vl = t.dataset.vl, o = k[vl] = k[vl] || {};
+      if (t.value) o[t.dataset.f] = t.value; else delete o[t.dataset.f]; if (!Object.keys(o).length) delete k[vl]; break; }
+    case 'uvapart': { const m = uvApartZet(p, t.checked); if (m) ui.msg = { text: m, kind: 'ok' }; break; }
+    case 'uvtrapmatk': { const tm = p.typeMaterial = p.typeMaterial || {}; if (t.value) tm[t.dataset.v] = t.value; else delete tm[t.dataset.v]; break; }
     case 'uvtrapafw': { const a = (B.afwTrap = B.afwTrap || {}), o = a[t.dataset.s] = a[t.dataset.s] || {}; if (t.value) o[t.dataset.t] = t.value; else delete o[t.dataset.t]; if (!Object.keys(o).length) delete a[t.dataset.s]; break; }
     // trap staat boven een andere trap (samen op één tekeningblad); '' = los
     case 'sboven': { const s = stairOf(p, t.dataset.s); if (!s) return 'skip';

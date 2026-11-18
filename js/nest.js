@@ -523,8 +523,8 @@ ZP.nest = (function () {
   // (trapboom|Links) of per onderdeelsoort (trapboom) – zoals de configurator die zet –, anders de tekening.
   function materialOf(p, S, typeMat) {
     // eigen keuze per stuk (Uitvoering, sleutel id:<onderdeel>; kopieën van trap × aantal volgen het origineel) gaat voor alles
-    // daarna de keuze voor deze ene trap (sleutel s:<trap>|<soort>: trappen in één project kunnen verschillen), dan per kant, dan per soort
-    const t = typeMat && (typeMat['id:' + String(p.id).split('*')[0]] || typeMat['s:' + p.stair + '|' + p.type] || typeMat[p.type + '|' + p.side + '|' + p.nr] || typeMat[p.type + '|' + p.side] || typeMat[p.type]);
+    // daarna de keuze voor deze ene trap (s:<trap>|<soort>|<kant>, dan s:<trap>|<soort>: trappen in één project kunnen verschillen), dan per kant, dan per soort
+    const t = typeMat && (typeMat['id:' + String(p.id).split('*')[0]] || (p.side && typeMat['s:' + p.stair + '|' + p.type + '|' + p.side]) || typeMat['s:' + p.stair + '|' + p.type] || typeMat[p.type + '|' + p.side + '|' + p.nr] || typeMat[p.type + '|' + p.side] || typeMat[p.type]);
     return t || M.canonMaterial(p.material, S.materialMap) || '(onbekend)';
   }
   // Groepen bepalen: materiaal + netto dikte. Onderdelen met dezelfde houtsoort en dikte (bv. treden, bomen en
