@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Timer-app voor de werkplaats: op de telefoon via https openen en "Zet op beginscherm" (zie KOPPELEN.md) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Timer">
+<meta name="theme-color" content="#14110e">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="timer.webmanifest">
+<link rel="apple-touch-icon" href="icons/timer-180.png">
+<link rel="icon" type="image/png" href="icons/timer-192.png">
+<title>Zaagplanner Timer</title>
+<style>
+  :root {
+    --bg: #14110e; --vlak: #221d18; --vlak2: #2d2620; --lijn: #3d342b; --tekst: #f3ece3; --zacht: #b5a898;
+    --hout: #c8894a; --oranje: #e8892b; --groen: #4caf6a; --rood: #d9534f; --geel: #e6c04a;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--tekst); font: 17px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { min-height: 100vh; min-height: 100dvh; }
+  #timer { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; max-width: 720px; margin: 0 auto; padding-bottom: env(safe-area-inset-bottom); }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: var(--vlak2); border-radius: 12px; padding: 12px 16px; min-height: 48px; }
+  button:disabled { opacity: .45; }
+  input, textarea { width: 100%; background: var(--vlak); border: 1px solid var(--lijn); border-radius: 10px; padding: 12px; font-size: 18px; }
+  input:focus, textarea:focus { outline: 2px solid var(--hout); border-color: transparent; }
+  .tk { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--bg); border-bottom: 1px solid var(--lijn); }
+  .tk-l { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .tk h1 { font-size: 20px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tk-terug { font-size: 30px; line-height: 1; padding: 4px 14px 8px; background: transparent; }
+  .tk-r { display: flex; gap: 6px; }
+  .tk-knop { font-size: 22px; padding: 6px 14px; background: transparent; }
+  .tm { flex: 1; padding: 14px 16px 18px; }
+  .t-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .t-raster.een { grid-template-columns: 1fr; }
+  .t-tegel { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; min-height: 104px; padding: 16px; text-align: left; background: var(--vlak); border: 1px solid var(--lijn); border-radius: 16px; }
+  .t-tegel b { font-size: 21px; }
+  .t-tegel span { color: var(--tekst); }
+  .t-tegel small { color: var(--zacht); font-size: 14px; }
+  .t-tegel:active { background: var(--vlak2); }
+  .t-tegel.af { border-color: var(--groen); }
+  .t-tegel.af small { color: var(--groen); }
+  .t-proj { min-height: 88px; }
+  .t-ond { border-left: 6px solid var(--hout); }
+  .o-opzetten, .o-montage { border-left-color: var(--zacht); }
+  .t-sub { color: var(--zacht); margin: 0 0 12px; }
+  .t-leeg { color: var(--zacht); text-align: center; padding: 30px 10px; }
+  .t-fout { color: #ffb4a8; background: #3a1f1a; border-radius: 10px; padding: 10px 12px; }
+  .t-ok { color: #b8f0c6; background: #1d3524; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; }
+  .t-achteraf { background: #3a3120; color: var(--geel); border-radius: 10px; padding: 10px 12px; }
+  .t-klein { color: var(--zacht); font-size: 14px; margin-top: 18px; }
+  .t-link { background: none; padding: 4px 0; min-height: 0; color: var(--hout); text-decoration: underline; }
+  .tl { display: block; margin: 0 0 14px; color: var(--zacht); font-size: 15px; }
+  .tl input, .tl textarea { margin-top: 5px; color: var(--tekst); }
+  .t-groot { display: block; width: 100%; min-height: 64px; font-size: 21px; font-weight: 700; border-radius: 16px; background: var(--hout); color: #1a120a; }
+  .t-onder { position: sticky; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 30%); }
+  .t-loopt { display: flex; align-items: center; gap: 10px; width: calc(100% - 32px); margin: 12px 16px 0; text-align: left; background: #233024; border: 1px solid var(--groen); }
+  .t-loopt span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .t-stip { width: 12px; height: 12px; border-radius: 50%; background: var(--groen); animation: knip 1.4s infinite; flex: none; }
+  .t-stip.p { background: var(--geel); animation: none; }
+  @keyframes knip { 50% { opacity: .3; } }
+  .t-mini { font-variant-numeric: tabular-nums; }
+  /* stukken */
+  .t-selbalk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .t-selbalk button { min-height: 44px; padding: 8px 14px; }
+  .t-leg { color: var(--zacht); font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .t-leg i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: #6d655c; }
+  .t-leg i.o { background: var(--oranje); margin-left: 8px; }
+  .t-stukken { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .t-stuk { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 76px; padding: 8px; border: 2px solid #6d655c; background: transparent; color: var(--tekst); border-radius: 14px; }
+  .t-stuk small { color: var(--zacht); font-size: 13px; }
+  .t-stuk.zwaar { border-color: var(--oranje); }
+  .t-stuk.op { background: #6d655c; color: #fff; }
+  .t-stuk.op small { color: #eee; }
+  .t-stuk.zwaar.op { background: var(--oranje); color: #1a120a; }
+  .t-stuk.zwaar.op small { color: #3a240c; }
+  .t-stukken:has(.klein) { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .t-stuk.klein { min-height: 64px; font-size: 22px; }
+  /* klok */
+  .t-klokscherm { display: flex; flex-direction: column; text-align: center; }
+  .t-klok { font-size: clamp(64px, 22vw, 132px); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -2px; margin: 18px 0 4px; }
+  .t-klok.pauze { color: var(--geel); }
+  .t-sinds { color: var(--zacht); margin: 0 0 22px; }
+  .t-knoppen { display: grid; gap: 14px; margin-top: auto; }
+  .t-knoppen .t-groot { min-height: 88px; font-size: 26px; }
+  .t-pauze { background: var(--vlak2); color: var(--tekst); }
+  .t-hervat { background: var(--groen); color: #08200f; }
+  .t-klaar { background: var(--hout); }
+  .t-vergeten { background: #3a3120; border: 1px solid var(--geel); border-radius: 14px; padding: 12px; text-align: left; }
+  .t-vergeten input { width: auto; padding: 8px; }
+  .t-rij { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+  .t-rij2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* aantal */
+  .t-tijd { font-size: 18px; }
+  .t-teller { display: grid; grid-template-columns: 80px 1fr 80px; gap: 10px; margin: 6px 0 14px; }
+  .t-teller button { font-size: 34px; min-height: 76px; }
+  .t-teller input { text-align: center; font-size: 38px; font-weight: 700; }
+  .t-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .t-chip { min-height: 44px; padding: 8px 14px; border: 1px solid var(--lijn); background: transparent; }
+  .t-chip.op { background: var(--geel); color: #2a2208; border-color: var(--geel); }
+  .t-check { display: flex; gap: 10px; align-items: center; margin: 0 0 14px; }
+  .t-check input { width: 24px; height: 24px; }
+  /* vandaag */
+  .t-mrij { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: var(--vlak); border: 1px solid var(--lijn); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .t-mrij span { display: flex; flex-direction: column; min-width: 0; }
+  .t-mrij small { color: var(--zacht); font-size: 14px; }
+  .t-mr { text-align: right; flex: none; }
+  .t-mrij.open { display: block; }
+  .t-prim { background: var(--hout); color: #1a120a; font-weight: 700; }
+  .t-weg { background: #3a1f1a; color: #ffb4a8; margin-left: auto; }
+  /* voet */
+  .tv { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--lijn); }
+  .tv button { min-height: 44px; padding: 8px 14px; }
+  .tv-st { margin-left: auto; color: var(--groen); font-size: 14px; }
+  .tv-st.uit { color: var(--geel); }
+  @media (min-width: 560px) { .t-raster:not(.een) { grid-template-columns: repeat(3, minmax(0, 1fr)); } .t-stukken { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<div id="timer"></div>
+<script src="js/cloud.js"></script>
+<script src="js/werk.js"></script>
+<script src="js/timer.js"></script>
+<script>
+  ZP.timer.scherm(document.getElementById('timer'));
+  // offline openen (service worker) – alleen via http(s)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

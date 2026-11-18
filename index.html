@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- iPad: als app op het beginscherm (Safari › Deel › Zet op beginscherm) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zaagplanner">
+<meta name="theme-color" content="#1e1812">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>Zaagplanner trappen</title>
+<link rel="icon" type="image/png" href="zaagplanner-pictogram.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<!-- pdf.js (alleen nodig voor het inlezen van PDF's; wordt van cdnjs geladen, er gaat geen data naar buiten) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- de pdf.js-worker als gewoon script: dan werkt PDF-inlezen ook als je index.html direct opent (zonder webserver) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script src="js/geom.js"></script>
+<script src="js/parts.js"></script>
+<script src="js/materials.js"></script>
+<script src="js/dxfimport.js"></script>
+<script src="js/pdfimport.js"></script>
+<script src="js/nest.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/render.js"></script>
+<script src="js/store.js"></script>
+<script src="js/fotos.js"></script>
+<script src="js/costing.js"></script>
+<script src="js/drawings.js"></script>
+<script src="js/view3d.js"></script>
+<script src="js/config.js"></script>
+<script src="js/cf3d.js"></script>
+<script src="js/spec3d.js"></script>
+<script src="js/opstelling.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/werk.js"></script>
+<script src="js/app/core.js"></script>
+<script src="js/app/projecten.js"></script>
+<script src="js/app/importeren.js"></script>
+<script src="js/app/controleren.js"></script>
+<script src="js/app/hout.js"></script>
+<script src="js/app/indeling.js"></script>
+<script src="js/app/berekenen.js"></script>
+<script src="js/app/afdrukken.js"></script>
+<script src="js/app/materialen.js"></script>
+<script src="js/app/prijzen.js"></script>
+<script src="js/app/begroting.js"></script>
+<script src="js/app/spectekening.js"></script>
+<script src="js/app/houtopties.js"></script>
+<script src="js/app/offerte.js"></script>
+<script src="js/app/varianten.js"></script>
+<script src="js/app/uitvoering.js"></script>
+<script src="js/app/configurator.js"></script>
+<script src="js/app/schets.js"></script>
+<script src="js/app/opstelling.js"></script>
+<script src="js/app/koppeling.js"></script>
+<script src="js/app/events.js"></script>
+<script>
+  // offline werken (service worker) – alleen via http(s), niet bij openen vanaf schijf (file://)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
