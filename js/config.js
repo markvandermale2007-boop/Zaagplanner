@@ -55,8 +55,10 @@ ZP.config = (function () {
   ];
   const modelVan = (v) => MODELLEN.find(m => m.k === v.model) || MODELLEN[1];
   // alleen de modellen van StairDesigner; oudere keuzes (type trap of een vervallen vorm) naar het dichtstbijzijnde model
-  const VAN_TYPE = { 'Rechte steektrap': 'm1', 'Kwartslag': 'm2', 'Dubbele kwartslag': 'm3', 'Bordestrap': 'm7', 'Spiltrap': 'm6', 'S-trap': 'm3', 'Kuiptrap': 'm6', 'Zoldertrap / steile trap': 'm1',
-    spil: 'm6', s: 'm3', kuip: 'm6', zolder: 'm1' };
+  const VAN_TYPE = { 'Rechte steektrap': 'm1', 'Kwartslag': 'm2', 'Dubbele kwartslag': 'm3', 'Bordestrap': 'm7', 'Spiltrap': 'm6', 'S-trap': 'm3', 'Zoldertrap / steile trap': 'm1',
+    spil: 'm6', s: 'm3', zolder: 'm1' };
+  // migratie: oude varianten met vorm "kuip" / type "Kuiptrap" (bestaat niet meer) worden model 6 (spiltrap)
+  VAN_TYPE.Kuiptrap = VAN_TYPE.kuip = 'm6';
   const TYPE_INFO = Object.fromEntries(MODELLEN.map(m => [m.norm, m.sub]));
   const RICHTING = [['rechts', 'Rechtsom'], ['links', 'Linksom']];
   const KANT = [['links', 'Linker kant', 'Links'], ['rechts', 'Rechter kant', 'Rechts']];        // [sleutel, label, kant in de tekening]
@@ -449,7 +451,7 @@ ZP.config = (function () {
     const nT = n('trede'), sch = schatting(v);
     if (nT && Math.abs(nT - sch.n) > 1) info(`In de configurator geschat: ${sch.n} treden; de tekening heeft er ${nT}.`);
     const g = CO.guessType(inc);
-    if (g !== v.type && !['Bordestrap', 'Kuiptrap', 'S-trap', 'Zoldertrap / steile trap'].includes(v.type)) info(`Gekozen: ${modelVan(v).naam.toLowerCase()}; de tekening is een ${g.toLowerCase()}. De begroting rekent met de tekening (type aan te passen bij Begroting).`);
+    if (g !== v.type && !['Bordestrap', 'S-trap', 'Zoldertrap / steile trap'].includes(v.type)) info(`Gekozen: ${modelVan(v).naam.toLowerCase()}; de tekening is een ${g.toLowerCase()}. De begroting rekent met de tekening (type aan te passen bij Begroting).`);
     // per kant: boom en leuning zoals in de tekening (namen "Trapboom Links #2", "Leuning Rechts #1")
     const metKant = inc.some(x => (x.type === 'trapboom' || x.type === 'keepboom' || x.type === 'leuning') && x.side);
     for (const [k, lab, side] of KANT) {

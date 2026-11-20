@@ -7,7 +7,7 @@ ZP.cost = (function () {
   const uid = (p) => p + Date.now().toString(36) + (seq++).toString(36);
   const VERSION = 11;                 // 11: leuninghout per profiel × houtsoort
 
-  const TRAPTYPES = ['Rechte steektrap', 'Kwartslag', 'Dubbele kwartslag', 'Spiltrap', 'Bordestrap', 'S-trap', 'Kuiptrap', 'Zoldertrap / steile trap'];
+  const TRAPTYPES = ['Rechte steektrap', 'Kwartslag', 'Dubbele kwartslag', 'Spiltrap', 'Bordestrap', 'S-trap', 'Zoldertrap / steile trap'];
   const VORMEN = ['Recht', 'Gebogen'];
   const PROFIELEN = ['Rond profiel', 'Ovaal profiel', 'Vierkant profiel met afronding', 'Decoratief gefreesd profiel', 'Vlak (plank) profiel', 'Stokleuning', 'Sleutelgat profiel', 'Muurleuning rond', 'Handregel op smetplank'];
   const STATUS = ['Offerte', 'Opdracht', 'In productie', 'Gereed in werkplaats', 'Geplaatst', 'Gefactureerd'];
@@ -125,6 +125,13 @@ ZP.cost = (function () {
     const c = db.cost;
     c.stootbordType = c.stootbordType || {}; c.houtFactor = c.houtFactor || {}; c.opzetten = c.opzetten || { prijs: 0, u: 0 };
     if (c.tarief.restPct === undefined) c.tarief.restPct = 0;
+    // geen kuiptrap meer (wens gebruiker 20-11-2026: kuip- en wronkstukken worden nooit gemaakt): type weg, oude keuzes → Spiltrap
+    if (Array.isArray(c.traptypes)) c.traptypes = c.traptypes.filter(t => t !== 'Kuiptrap');
+    for (const o of [c.treden, c.stootbordType]) if (o) delete o.Kuiptrap;
+    for (const p of (db.projects || [])) {
+      for (const s of Object.values(((p.begroting || {}).stairs) || {})) if (s && s.type === 'Kuiptrap') s.type = 'Spiltrap';
+      for (const v of ((p.config || {}).varianten || [])) if (v && v.type === 'Kuiptrap') v.type = 'Spiltrap';
+    }
     // koppeltabel materiaalnamen (instellingen) voor de houtsoort-factor; niet mee opslaan
     if (!Object.prototype.hasOwnProperty.call(c, 'matMap')) Object.defineProperty(c, 'matMap', { value: () => (db.settings || {}).materialMap, enumerable: false, configurable: true });
     return db.cost;
@@ -133,7 +140,7 @@ ZP.cost = (function () {
   // ---------- normen (uren) opzoeken: niet gemeten = gemiddelde van de groep ----------
   const pos = (x, gem) => (x > 0 ? x : gem) || 0;
   // normbestand versie 11: treden per soort (recht / verdreven) zonder afwerken; afwerken apart per afwerking en onderdeel
-  const VERDREVEN_AANDEEL = { 'Rechte steektrap': 0, Kwartslag: 0.23, 'Dubbele kwartslag': 0.43, Spiltrap: 1, Bordestrap: 0, 'S-trap': 0.43, Kuiptrap: 0.6, 'Zoldertrap / steile trap': 0 };
+  const VERDREVEN_AANDEEL = { 'Rechte steektrap': 0, Kwartslag: 0.23, 'Dubbele kwartslag': 0.43, Spiltrap: 1, Bordestrap: 0, 'S-trap': 0.43, 'Zoldertrap / steile trap': 0 };
   const tredeSoortU = (C, soort) => pos((C.tredeNorm || {})[soort], C.tredeNormGem);
   // per tred voor een type trap; met versie 11 het gemiddelde van recht en verdreven naar het gangbare aandeel verdreven treden
   const tredeU = (C, type) => {

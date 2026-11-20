@@ -116,14 +116,12 @@ ZP.drawings = (function () {
     'Bordestrap': () => run(18, 46, 48, 112, 7) + '<rect class="cf-landing" x="18" y="16" width="30" height="30"/>' + run(48, 16, 112, 46, 7, 'right') + arrow('M33 106V31H106'),
     'S-trap': () => run(14, 82, 42, 112, 3) + fan(14, 54, 42, 82, 42, 82, [[14, 74], [14, 64], [14, 54], [24, 54], [34, 54]])
       + run(42, 54, 78, 82, 4, 'right') + fan(78, 54, 106, 82, 78, 54, [[86, 82], [96, 82], [106, 82], [106, 72], [106, 62]]) + run(78, 8, 106, 54, 5) + arrow('M28 108V68H92V14'),
-    'Kuiptrap': () => { let s = '<path class="cf-run" d="M10 70A50 50 0 0 1 110 70H82A22 22 0 0 0 38 70z"/>'; for (let i = 1; i < 12; i++) { const a = Math.PI + (i / 12) * Math.PI; s += `<path class="cf-tl" d="M${60 + 22 * Math.cos(a)} ${70 + 22 * Math.sin(a)}L${60 + 50 * Math.cos(a)} ${70 + 50 * Math.sin(a)}"/>`; }
-      return s + run(10, 70, 38, 112, 3) + run(82, 70, 110, 112, 3) + arrow('M24 108V70A36 36 0 0 1 96 70V104'); },
     'Zoldertrap / steile trap': () => run(48, 10, 72, 110, 9) + arrow('M60 104V18') + '<text class="cf-lbl" x="96" y="64" text-anchor="middle">steil</text>',
   };
   // modellen zoals StairDesigner (Nieuwe trap › Modellen); bestaande vormen hergebruikt
   Object.assign(PLAN, {
     m1: PLAN['Rechte steektrap'], m2: PLAN['Kwartslag'], m3: PLAN['Dubbele kwartslag'], m7: PLAN['Bordestrap'],
-    spil: PLAN['Spiltrap'], s: PLAN['S-trap'], kuip: PLAN['Kuiptrap'], zolder: PLAN['Zoldertrap / steile trap'],
+    spil: PLAN['Spiltrap'], s: PLAN['S-trap'], zolder: PLAN['Zoldertrap / steile trap'],
     m4: () => run(40, 40, 72, 112, 6) + fan(40, 8, 72, 40, 72, 40, [[40, 32], [40, 20], [40, 8], [52, 8], [62, 8]]) + run(72, 8, 104, 40, 2, 'right') + arrow('M56 106V24H98'),
     m5: () => run(72, 80, 104, 112, 2, 'right') + fan(40, 80, 72, 112, 72, 80, [[62, 112], [52, 112], [40, 112], [40, 100], [40, 90]]) + run(40, 8, 72, 80, 7) + arrow('M98 96H56V16'),
     m6: () => { let s = run(16, 54, 46, 112, 5) + run(74, 54, 104, 112, 5) + '<path class="cf-run" d="M16 54A44 44 0 0 1 104 54H74A14 14 0 0 0 46 54z"/>';
