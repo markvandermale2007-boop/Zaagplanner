@@ -148,10 +148,19 @@ function uvTrapDrager(p, sid) {
   // muur of vrij zoals de begroting het nu rekent: eigen kanten → kanten van het project → keuze per kant → geen balusters aan die kant
   const kanten = o.kanten || (B.drager && B.drager.kanten) || null, lk = B.leuningKant || {};
   const muur = (z) => (kanten ? kanten.includes(z) : lk[z] ? lk[z].plaats === 'muur' : !uvIncVan(p, sid).some(x => x.type === 'baluster' && x.side === z));
+  // aantal dragers per leuningstuk: zelfde regel als costing dragersVoor (≤1,70 m 2, ≤3 m 3, langer ±1 per 0,7 m)
+  const perStuk = (m) => (m <= 0 ? 0 : m <= 1.7 ? 2 : m <= 3 ? 3 : Math.max(4, Math.round(m / 0.7)));
+  const aantal = (z) => leun.filter(x => x.side === z).reduce((a, x) => a + perStuk((x.L || 0) / 1000), 0);
+  const soort = o.id === 'std' ? 'muurleuninghouder' : o.id ? ((c.dragers.find(d => d.id === o.id) || {}).naam || 'drager') : drP ? drP.naam : 'muurleuninghouder';
+  const bron = o.kanten ? 'Zelf gekozen.' : B.drager && B.drager.kanten ? 'Zoals bij het hele project gekozen.' : 'Uit de tekening: een kant met balusters is vrij, een kant zonder balusters hangt aan de muur.';
+  const kantRij = (z) => { const m = muur(z), n = aantal(z);
+    return `<label class="uv-drkant${m ? ' aan' : ''}"><input type="checkbox" data-bind="uvtrapdkant" data-s="${sid}" data-k="${esc(z)}" ${m ? 'checked' : ''}>
+      <b>${esc(z)}</b> <span>${m ? `leuning tegen de muur → <b>${n} ${n === 1 ? 'drager' : 'dragers'}</b> (${esc(soort)})` : 'leuning vrij (niet tegen de muur) → geen dragers'}</span></label>`; };
   return `<div class="uv-trapdeel uv-trapdrager"><h4>Leuningdragers trap ${stairCode(p, sid)}</h4>
-    <div class="row wrap small"><select data-bind="uvtrapdrager" data-s="${sid}" class="${o.id ? 'set' : ''}">${opts([['', `zoals het project (${drP ? drP.naam : 'standaard muurleuninghouder'})`], ['std', 'standaard (muurleuninghouder uit het beslag)']].concat(c.dragers.map(d => [d.id, `${d.naam} (${eur(d.prijs)})`])), o.id || '')}</select>
-    ${zijden.length ? `<span class="muted">muurleuning aan:</span> ${zijden.map(z => `<label><input type="checkbox" data-bind="uvtrapdkant" data-s="${sid}" data-k="${esc(z)}" ${muur(z) ? 'checked' : ''}> ${esc(z.toLowerCase())}</label>`).join(' ')}
-      <span class="muted">${o.kanten ? 'eigen keuze' : 'uit de tekening (balusters = vrij)'}</span>${o.kanten ? ` <button class="ghost small" data-act="uvtrapdkantterug" data-v="${sid}" title="Kanten weer uit de tekening / het project">↺</button>` : ''}` : ''}</div></div>`;
+    <p class="muted small">Alleen een leuning die tegen de muur hangt krijgt dragers. Vink aan welke kant tegen de muur zit.</p>
+    ${zijden.length ? `<div class="uv-drkanten">${zijden.map(kantRij).join('')}</div>
+      <div class="muted small">${bron}${o.kanten ? ` <button class="ghost small" data-act="uvtrapdkantterug" data-v="${sid}">↺ Terug naar de tekening</button>` : ''}</div>` : ''}
+    <label class="small uv-drsoort">Soort drager <select data-bind="uvtrapdrager" data-s="${sid}" class="${o.id ? 'set' : ''}">${opts([['', `zoals het hele project (${drP ? drP.naam : 'muurleuninghouder'})`], ['std', 'muurleuninghouder (standaard, uit het beslag)']].concat(c.dragers.map(d => [d.id, `${d.naam} (${eur(d.prijs)} per stuk)`])), o.id || '')}</select></label></div>`;
 }
 
 // ---------- per stuk: elk onderdeel apart aanpasbaar ----------

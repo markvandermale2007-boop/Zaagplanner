@@ -108,6 +108,12 @@ main { padding: 28px 34px 60px; max-width: 1480px; }
 .uv-trapkop { color: var(--accent); }
 .uv-trapdeel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 .uv-trapdeel h4 { margin: 0; }
+.uv-trapdrager > p { margin: 2px 0 8px; }
+.uv-drkanten { display: grid; gap: 6px; margin-bottom: 6px; }
+.uv-drkant { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.uv-drkant.aan { border-color: var(--accent); background: var(--accent-soft); }
+.uv-drkant > b { min-width: 52px; }
+.uv-drsoort { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .uv-vloerbal { margin: 8px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--surface-2); border-radius: 6px; }
 .uv-vloerbal h4 { margin: 0 0 6px; color: var(--accent); }
 .uv-spijl .uv-staal { height: 70px; background: var(--surface-2); display: grid; place-items: center; } .uv-spijl .uv-staal svg, .uv-spijl .uv-staal img { max-height: 66px; max-width: 100%; }
