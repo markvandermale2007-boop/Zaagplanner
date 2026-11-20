@@ -195,7 +195,15 @@ ZP.dxfimport = (function () {
       const base = { name: P.canonicalName(pn.type, pn.side, pn.nr), type: pn.type, side: pn.side, nr: pn.nr, layer: r.layer,
         material: '', thickness: a.thickness, source: 'dxf', warnings: [] };
       let outline = a.outline;
-      if (a.curved && pn.type !== 'trede') {
+      // Spil en baluster: recht vierkant/rechthoekig profiel. Elk zijvlak van een vierkante spil is maar ±25% van het
+      // oppervlak, dus "geen dominant vlak" (= gebogen) klopt hier niet: dan werd de spil afgewikkeld op een raster van
+      // 5 mm (90 × 90 werd 95 breed). De kopse maat telt: omhullende rechthoek van het hele model in het vlak van de
+      // zijkant (insnijdingen voor de treden tellen niet, de spil wordt uit een hele balk gemaakt).
+      const isPost = pn.type === 'spil' || pn.type === 'baluster';
+      if (isPost) {
+        const b = G.bbox(r.tris.flat().map(a.to2));
+        outline = [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]];
+      } else if (a.curved && pn.type !== 'trede') {
         const u = unroll(r.tris);
         outline = u.outline;
         base.curved = true;
@@ -223,5 +231,27 @@ ZP.dxfimport = (function () {
     return result;
   }
 
-  return { read, parse, collect, analyse };
+  // Bestaande projecten: spil/baluster die vóór 19-11-2026 als "gebogen" is ingelezen (vierkante spil 90 × 90 werd
+  // 95 breed) opnieuw meten uit het bewaarde 3D-model (part.mesh, hele mm). Geeft true als het onderdeel is aangepast.
+  function herstelPaal(part) {
+    if (!part || (part.type !== 'spil' && part.type !== 'baluster') || part.source !== 'dxf' || !part.curved || !part.mesh || part.mesh.length < 9) return false;
+    const m = part.mesh, tris = [];
+    for (let i = 0; i + 8 < m.length; i += 9) tris.push([[m[i], m[i + 1], m[i + 2]], [m[i + 3], m[i + 4], m[i + 5]], [m[i + 6], m[i + 7], m[i + 8]]]);
+    const a = analyse(tris, false);
+    // het model is op hele mm afgerond: uiterste = gemiddelde van de punten op het uiterste vlak (anders 1 mm te veel bij een gedraaide spil)
+    const pts = tris.flat().map(a.to2);
+    const ext = (k) => { const vs = pts.map(q => q[k]); const lo = Math.min(...vs), hi = Math.max(...vs);
+      const gem = (f) => { const s = vs.filter(f); return s.reduce((x, y) => x + y, 0) / s.length; };
+      return [gem(v => v < lo + 1.5), gem(v => v > hi - 1.5)]; };
+    const [x0, x1] = ext(0).map(Math.round), [y0, y1] = ext(1).map(Math.round);
+    // dikte: die van de oude import was al goed (gemeten op het niet-afgeronde model); de breedte was afgewikkeld
+    const base = Object.assign({}, part, { thickness: part.thickness || Math.round(a.thickness), warnings: (part.warnings || []).filter(w => !/Gebogen onderdeel/.test(w)) });
+    delete base.curved;
+    const np = P.fromContour(base, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], {});
+    delete part.curved;
+    Object.assign(part, np);
+    return true;
+  }
+
+  return { read, parse, collect, analyse, herstelPaal };
 })();

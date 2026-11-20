@@ -48,6 +48,14 @@ function specPerTrap(p) {
   return p.stairs.map(s => {
     const k = Object.assign({}, p, { stairs: [s], parts: p.parts.filter(x => x.stair === s.id), layouts: {}, opstelling: null, _kopie: true });
     k.begroting = JSON.parse(JSON.stringify(p.begroting || {}));
+    // opties van een andere trap horen niet op deze staat (bw.trap; zonder trap = hele project)
+    if (k.begroting.bew) k.begroting.bew = k.begroting.bew.filter(bw => !bw.trap || bw.trap === s.id);
+    // leuningdrager van deze trap (vinkje "Trappen wijken af"): de kopie heeft één trap, dus de keuze wordt die van het "project"
+    const dt = CO.trappenApart(p) && ((p.begroting || {}).dragerTrap || {})[s.id];
+    // (id '' = standaard muurleuninghouder; costing rekent de kanten dan toch mee)
+    if (dt) { const kb = k.begroting; kb.drager = Object.assign({ deel: 1 }, kb.drager || {});
+      if (dt.id) kb.drager.id = dt.id === 'std' ? '' : dt.id;
+      if (dt.kanten) kb.drager.kanten = dt.kanten; }
     return { p: k, trap: `Trap ${stairCode(p, s.id)} – ${s.name}` };
   });
 }

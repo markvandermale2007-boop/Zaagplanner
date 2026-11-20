@@ -37,7 +37,9 @@ function opsSvg(p, o, vl, edit) {
   if (gat.length >= 3) s += `<path d="M${gat.map(q => q.join(' ')).join('L')}z" class="vb-gat"/>`;
   s += voet(aan, 'ops-aan') + voet(hier, 'ops-hier');
   for (const w of wanden) {
-    s += `<path d="M${w.a.join(' ')}L${w.b.join(' ')}" class="ops-wandrand" stroke-width="${(+w.d || 100) + 24}"/><path d="M${w.a.join(' ')}L${w.b.join(' ')}" class="ops-wand" stroke="${esc(w.kleur || o.wandKleur)}" stroke-width="${+w.d || 100}"/>`;
+    // grondvorm: de lijn ligt tegen de trap, de dikte aan de zijde van de wand (ZP.ops.wandVorm)
+    const V = O.wandVorm(o, w), dd = V ? `M${V.vlak.map(q => q.map(Math.round).join(' ')).join('L')}z` : `M${w.a.join(' ')}L${w.b.join(' ')}`;
+    s += `<path d="${dd}" class="ops-wand" fill="${esc(w.kleur || o.wandKleur)}"/><path d="${dd}" class="ops-wandrand" stroke-width="24"/>`;
     const L = Math.round(Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])), mx = (w.a[0] + w.b[0]) / 2, my = (w.a[1] + w.b[1]) / 2;
     if (edit) s += `<text x="${mx}" y="${my - 110}" class="vb-maat" text-anchor="middle">${L}</text>`;
   }
@@ -130,7 +132,8 @@ function bindOps() {
       if (k === 'wa') x.a = opsSnap(p, o, vl, q, x.b); else if (k === 'wb') x.b = opsSnap(p, o, vl, q, x.a);
       else if (k === 'bal') x.punten[i] = opsSnap(p, o, vl, q, x.punten[i - 1]); else x.gat.punten[i] = opsSnap(p, o, vl, q, x.gat.punten[i - 1]);
       ui.opsDrag = true; box.innerHTML = opsSvg(p, o, vl, true); };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); if (ui.opsDrag) { ZP.ops.naarBegroting(p, C()); save(); render(); } setTimeout(() => { ui.opsDrag = false; }, 0); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      if (ui.opsDrag) { if (k === 'wa' || k === 'wb') ZP.ops.wandLangsTrap(p, x); ZP.ops.naarBegroting(p, C()); save(); render(); } setTimeout(() => { ui.opsDrag = false; }, 0); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   });
   box.addEventListener('dblclick', (e) => { const h = e.target.closest('.ops-h'); if (!h) return; const k = h.dataset.k, x = ptOf(k, h.dataset.id);
@@ -152,7 +155,8 @@ CLICK.push(function click_opstelling(a, t, v, p, e) {
       if (ui.opsTool === 'wis') {
         // dichtstbijzijnde wand of balustrade onder de klik weghalen
         const qq = [q.x, q.y]; let best = null;
-        for (const w of o.wanden) if (w.vloer === vl.id) { const d = opsAfst(qq, w.a, w.b) - (+w.d || 100) / 2; if (d < 120 && (!best || d < best.d)) best = { d, w }; }
+        for (const w of o.wanden) if (w.vloer === vl.id) { const V = ZP.ops.wandVorm(o, w), m = V ? V.midden : 0, sx = V ? V.R.nx * m : 0, sy = V ? V.R.ny * m : 0;
+          const d = opsAfst(qq, [w.a[0] + sx, w.a[1] + sy], [w.b[0] + sx, w.b[1] + sy]) - (+w.d || 100) / 2; if (d < 120 && (!best || d < best.d)) best = { d, w }; }
         for (const b of o.balustrades) if (b.vloer === vl.id) for (let i = 0; i < b.punten.length; i++) { const d = opsAfst(qq, b.punten[Math.max(0, i - 1)], b.punten[i]) - 50; if (d < 120 && (!best || d < best.d)) best = { d, b }; }
         if (!best) { ui.msg = { text: 'Hier ligt geen wand of balustrade. Klik op de lijn zelf.', kind: 'warn' }; render(); break; }
         opsBewaar(p);
@@ -163,7 +167,11 @@ CLICK.push(function click_opstelling(a, t, v, p, e) {
         const pt = opsSnap(p, o, vl, q, ui.opsStart);
         if (!ui.opsStart) { ui.opsStart = pt; render(); break; }
         if (pt[0] === ui.opsStart[0] && pt[1] === ui.opsStart[1]) { ui.opsStart = null; render(); break; }
-        opsBewaar(p); o.wanden.push({ id: ZP.ops.uid('w'), vloer: vl.id, a: ui.opsStart, b: pt, h: opsPeilBoven(o, vl), d: 100, kleur: o.wandKleur }); ui.opsStart = pt; save(); render(); break;
+        opsBewaar(p); const w = { id: ZP.ops.uid('w'), vloer: vl.id, a: ui.opsStart, b: pt, h: opsPeilBoven(o, vl), d: 100, kleur: o.wandKleur };
+        o.wanden.push(w);
+        // langs een trap: lijn tegen het buitenvlak van de boom, wand aan de buitenkant (nooit door de boom heen)
+        if (ZP.ops.wandLangsTrap(p, w)) ui.msg = { text: 'Wand tegen de buitenkant van de trap gezet.', kind: 'ok' };
+        ui.opsStart = w.b.slice(); save(); render(); break;
       }
       opsBewaar(p);
       if (ui.opsTool === 'gat' && vl.gat) { vl.gat.punten = vl.gat.punten || []; vl.gat.punten.push(opsSnap(p, o, vl, q, vl.gat.punten[vl.gat.punten.length - 1])); save(); render(); break; }

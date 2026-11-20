@@ -23,6 +23,8 @@ ZP.store = (function () {
       db.matExtra = db.matExtra || []; // houtsoorten die (nog) geen plank soorten hebben
       db.subExtra = db.subExtra || []; // plank soorten die (nog) geen maten hebben: {material, sub, grossT, netT}
       db.projects = db.projects || [];
+      // spillen/balusters die als gebogen waren ingelezen (vierkante spil 90 × 90 werd 95 breed): opnieuw meten uit het 3D-model
+      if (ZP.dxfimport && ZP.dxfimport.herstelPaal) for (const p of db.projects) for (const x of p.parts || []) ZP.dxfimport.herstelPaal(x);
       return db;
     } catch (e) { console.warn('Opslag niet leesbaar', e); return blank(); }
   }

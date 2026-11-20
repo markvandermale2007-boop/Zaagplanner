@@ -112,15 +112,19 @@ ZP.view3d = (function () {
       me.position.z = vl.z - d; group.add(rand(me));
     }
     const peil = (id) => (o.vloeren.find(v => v.id === id) || { z: 0 }).z;
-    // wand van a naar b, dikte d (midden op de lijn); per uiteinde een eigen onderkant (za/zb, t.o.v. de vloer) en hoogte (h/hb):
-    // zo loopt een wand schuin mee met een trap- of keepboom
+    // wand: grondvorm uit ZP.ops.wandVorm (lijn = vlak tegen de trap, dikte naar de zijde, hoeken dicht); per uiteinde een eigen
+    // onderkant (za/zb, t.o.v. de vloer) en hoogte (h/hb): zo loopt een wand schuin mee met een trap- of keepboom
     for (const w of o.wanden) {
-      const A = O.naar3d(w.a), B = O.naar3d(w.b), L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (L < 10) continue;
-      const d = +w.d || 100, za = +w.za || 0, zb = w.zb == null ? za : +w.zb || 0, h = +w.h || 2600, hb = w.hb == null ? h : +w.hb || h;
-      const sh = new THREE.Shape([new THREE.Vector2(0, za), new THREE.Vector2(L, zb), new THREE.Vector2(L, zb + hb), new THREE.Vector2(0, za + h)]);
-      const geo = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); geo.translate(0, 0, -d / 2); geo.rotateX(Math.PI / 2);
-      const me = new THREE.Mesh(geo, lam(new THREE.Color(w.kleur || o.wandKleur || '#ece6dc'), { transparent: true, opacity: 0.92 }));
-      me.position.set(A[0], A[1], peil(w.vloer)); me.rotation.z = Math.atan2(B[1] - A[1], B[0] - A[0]); group.add(rand(me));
+      const V = O.wandVorm(o, w); if (!V || V.R.L < 10) continue;
+      const Z = O.wandZ(w), z = peil(w.vloer);
+      const hoek = V.vlak.map(q => { const t = Math.max(0, Math.min(1, ((q[0] - w.a[0]) * V.R.ux + (q[1] - w.a[1]) * V.R.uy) / V.R.L)), o0 = Z.za + (Z.zb - Z.za) * t;
+        return { x: q[0], y: -q[1], z0: z + o0, z1: z + o0 + Z.h + (Z.hb - Z.h) * t }; });
+      const pos = [], tri = (a, b, c) => pos.push(...a, ...b, ...c), quad = (a, b, c, d) => { tri(a, b, c); tri(a, c, d); };
+      const lo = hoek.map(q => [q.x, q.y, q.z0]), hi = hoek.map(q => [q.x, q.y, q.z1]);
+      quad(lo[0], lo[1], lo[2], lo[3]); quad(hi[0], hi[1], hi[2], hi[3]);
+      for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; quad(lo[i], lo[j], hi[j], hi[i]); }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+      group.add(rand(new THREE.Mesh(geo, lam(new THREE.Color(w.kleur || o.wandKleur || '#ece6dc'), { transparent: true, opacity: 0.92 }))));
     }
     // balustrade: palen op de hoekpunten, leuning op 1000, spijlen, onderslof
     const hout = lam(0xcfa46c, null, { rol: 'leuning' }), paal = lam(0xb88a5a, null, { rol: 'spil' }), spijlH = lam(0xcfa46c, null, { rol: 'baluster' });

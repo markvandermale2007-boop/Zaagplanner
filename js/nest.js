@@ -629,7 +629,8 @@ ZP.nest = (function () {
     const ofThick = ofWood.filter(m => Math.abs(m.netT - group.thickness) < 0.6);
     const subsOf = (rows) => [...new Set(rows.map(m => m.sub || M.fullName(m)))].join(', ');
     if (!ofWood.length) problems.push(`Geen houtsoort "${group.material}" in de materialenlijst. Voeg hem toe bij Materialen of kies bij Hout een andere houtsoort.`);
-    else if (!ofThick.length) problems.push(`${group.material} heeft geen plank soort met netto ${group.thickness} mm (wel: ${[...new Set(ofWood.map(m => m.netT))].sort((a, b) => a - b).map(t => t + ' mm').join(', ')}). Pas de dikte van het onderdeel aan of voeg een plank soort met die dikte toe.`);
+    else if (!ofThick.length) problems.push(`${group.material} heeft geen plank soort met netto ${group.thickness} mm (wel: ${[...new Set(ofWood.map(m => m.netT))].sort((a, b) => a - b).map(t => t + ' mm').join(', ')}). Pas de dikte van het onderdeel aan of voeg een plank soort met die dikte toe.` +
+      (group.parts.some(p => p.type === 'spil') ? ' Een spil kan ook uit lagen verlijmd worden: vink bij Materialen → Geschikt voor "Spillen" aan bij een dunnere plank soort die breed en lang genoeg is.' : ''));
     for (const t of [...new Set(group.parts.map(p => p.type))])
       if (ofThick.length && !ofThick.some(m => M.allows(m, t))) problems.push(`Plank soort ${subsOf(ofThick)} van ${group.material} ${group.thickness} mm is niet aangevinkt voor ${ZP.parts.TYPES[t].label.toLowerCase()}. Vink "${ZP.parts.TYPES[t].label}" aan bij Materialen → Geschikt voor.`);
     if (stocks.length) for (const pc of chosen.sol.unplaced) {

@@ -106,6 +106,8 @@ main { padding: 28px 34px 60px; max-width: 1480px; }
 .uv-apart { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .uv-trapkaart { border-left: 4px solid var(--accent, #b07a3c); }
 .uv-trapkop { color: var(--accent); }
+.uv-trapdeel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.uv-trapdeel h4 { margin: 0; }
 .uv-vloerbal { margin: 8px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--surface-2); border-radius: 6px; }
 .uv-vloerbal h4 { margin: 0 0 6px; color: var(--accent); }
 .uv-spijl .uv-staal { height: 70px; background: var(--surface-2); display: grid; place-items: center; } .uv-spijl .uv-staal svg, .uv-spijl .uv-staal img { max-height: 66px; max-width: 100%; }
@@ -1110,10 +1112,10 @@ details summary { cursor: pointer; font-weight: 600; }
 .ops-vl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
 .ops-hier { fill: #e7c08c; stroke: #5b3f24; stroke-width: 8; } .ops-aan { fill: #e7c08c; fill-opacity: .35; stroke: #5b3f24; stroke-opacity: .45; stroke-width: 6; stroke-dasharray: 40 30; }
 .ops-tlbl { font-size: 150px; fill: var(--ink-2); } .ops-tlbl.aan { fill: var(--muted); font-style: italic; }
-.ops-wand { stroke-linecap: square; } .ops-wandrand { fill: none; stroke: #4a4036; stroke-opacity: .35; stroke-linecap: square; mix-blend-mode: multiply; pointer-events: none; }
+.ops-wand { stroke: none; } .ops-wandrand { fill: none; stroke: #4a4036; stroke-opacity: .35; stroke-linejoin: miter; mix-blend-mode: multiply; pointer-events: none; }
 .ops-wand { pointer-events: none; } .vb-line.act { stroke: #2f6f9f; }
-/* gum: wand/balustrade onder de muis rood, klik = weg */
-.ops-wis { cursor: crosshair; } .ops-wis .ops-wand, .ops-wis .vb-line { pointer-events: stroke; } .ops-wis .ops-wand:hover, .ops-wis .vb-line:hover { stroke: #c0392b !important; }
+/* gum: wand/balustrade onder de muis rood, klik = weg (wand = vlak, balustrade = lijn) */
+.ops-wis { cursor: crosshair; } .ops-wis .ops-wand { pointer-events: fill; } .ops-wis .vb-line { pointer-events: stroke; } .ops-wis .ops-wand:hover { fill: #c0392b !important; } .ops-wis .vb-line:hover { stroke: #c0392b !important; }
 .ops-start { fill: #2f6f9f; fill-opacity: .4; stroke: #2f6f9f; stroke-width: 16; pointer-events: none; }
 .vb-handle.wa, .vb-handle.wb { fill: #4a4036; fill-opacity: .2; stroke: #4a4036; stroke-width: 12; }
 .ops-kl { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line-strong); padding: 0; cursor: pointer; } .ops-kl.on { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -1249,7 +1251,8 @@ main { padding-top: calc(28px + env(safe-area-inset-top, 0px)); }
 .ho-zs-r { min-width: 0; }
 .ho-cuts summary { cursor: pointer; font-weight: 600; margin: 8px 0; }
 @media (max-width: 1023px) { .ho-zs { grid-template-columns: minmax(0, 1fr); } .ho-zs-l { max-height: 320px; } }
-.hout-perkant { margin-top: 4px; color: var(--warn, #9a5b00); }
+.hout-overzicht .ml-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.hout-keuze b { font-weight: 600; }
 .cf-kanteigen { margin: 6px 0; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); }
 /* kop offerte/specificatiestaat: logo + bedrijfsgegevens */
 .bp-firm .bp-logo { display: block; max-height: 22mm; max-width: 75mm; margin: 0 0 4px auto; }

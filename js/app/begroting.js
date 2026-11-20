@@ -308,7 +308,7 @@ function specGroepen(p, r) {
   });
   // leuningdragers: gekozen soort, anders de standaard muurleuninghouder uit het beslag (soort + aantal)
   // zonder aantal (wens gebruiker): alleen welke dragers, bij de muurleuning
-  for (const l of L('drager')) lrows.push(['Leuningdragers', `${(c.dragers.find(d => d.id === B.drager.id) || {}).naam || l.label.replace(/^Leuningdragers – /, '')} (bij de muurleuning)`]);
+  for (const l of L('drager')) lrows.push(['Leuningdragers', `${(c.dragers.find(d => d.id === ((l.extra || {}).drager || {}).id) || {}).naam || l.label.replace(/^Leuningdragers – /, '')} (bij de muurleuning)`]);
   if (!L('drager').length) for (const l of lines.filter(l => l.key.startsWith('bs:') && /muurleuninghouder/i.test(l.label) && +l.qty > 0)) lrows.push(['Leuningdragers', `${l.label} (bij de muurleuning)`]);
   for (const l of L('bal')) { const g = l.extra.cfg, sp = l.extra.spijl, vk = l.extra.vloerKeuze || {};
     // balustrade per verdieping anders: eigen houtsoort / afwerking van die verdieping erbij

@@ -215,6 +215,34 @@ ZP.cost = (function () {
   // balustrades per verdieping anders (B.balApart, Uitvoering): keuze B.balVloer[vloernaam] = {type, spijl, hout, afw}
   // geldt voor balustraderegels "op de verdieping" (sleutel = bl.vloer, '' = zonder naam). Type = samenstelling van dat type,
   // spijl gaat daar nog voor. Hout en afwerking komen op de specificatiestaat (de prijs per meter rekent met het spijltype).
+  // vorm (Recht/Gebogen) van een boom of leuningstuk zoals de begroting rekent.
+  // Boom: eigen keuze per stuk → configurator (soort|kant|nr, soort|kant) → keuze per trap (B.stairs[trap].boomVorm/keepVorm) → tekening.
+  // Leuning: eigen keuze per stuk → B.leuning.vorm (niet 'vorm uit tekening') → uit de tekening = de vorm van de boom aan dezelfde
+  // kant van dezelfde trap (gebogen = hij loopt mee met de ronding van de boom). Een draai/aansluitstuk telt als rechte leuning;
+  // zonder boom aan die kant (bv. langs een spil) alleen gebogen als het stuk zelf gebogen is en minstens 1,5 m lang.
+  function stukVorm(p, B, x) {
+    B = B || {}; const m = B.boomVormen || {}, eigen = m['id:' + String(x.id).split('*')[0]]; if (eigen) return eigen;
+    if (x.type === 'trapboom' || x.type === 'keepboom') {
+      const std = ((B.stairs || {})[x.stair] || {})[x.type === 'trapboom' ? 'boomVorm' : 'keepVorm'];
+      return m[x.type + '|' + x.side + '|' + x.nr] || m[x.type + '|' + x.side] || (std && std !== 'auto' ? std : ZP.parts.vorm(x) || 'Recht');
+    }
+    if (x.type === 'leuning') {
+      const L = B.leuning || {}; if (!L.auto && L.vorm) return L.vorm;
+      return leunVormTekening(p, B, x);
+    }
+    return ZP.parts.vorm(x) || 'Recht';
+  }
+  function leunVormTekening(p, B, x) {
+    const bomen = x.side ? p.parts.filter(y => y.include !== false && y.stair === x.stair && y.side === x.side && (y.type === 'trapboom' || y.type === 'keepboom')) : [];
+    if (bomen.length) return bomen.some(y => stukVorm(p, B, y) === 'Gebogen') ? 'Gebogen' : 'Recht';
+    return (+x.L || 0) >= 1500 && ZP.parts.vorm(x) === 'Gebogen' ? 'Gebogen' : 'Recht';
+  }
+  // vinkje "Trappen wijken van elkaar af" (Uitvoering): B.trappenApart; nog nooit gekozen + bestaande keuzes per trap = aan
+  function trappenApart(p) {
+    if (!p.stairs || p.stairs.length < 2) return false; const B = p.begroting || {}, a = B.trappenApart;
+    if (a !== undefined) return !!a;
+    return Object.keys(p.typeMaterial || {}).some(k => k.startsWith('s:')) || Object.values(B.afwTrap || {}).some(o => Object.keys(o || {}).length);
+  }
   function balVloerVan(B, bl) { return B && B.balApart && bl.plaats === 'verdieping' ? ((B.balVloer || {})[bl.vloer || ''] || null) : null; }
   function balEffectief(B, bl) {
     const o = balVloerVan(B, bl); if (!o) return bl;
@@ -464,7 +492,7 @@ ZP.cost = (function () {
     const leunLines = [];
     // recht of gebogen per leuningstuk: eigen keuze per stuk (B.boomVormen['id:…'], Uitvoering) → uit de tekening (B.leuning.auto)
     // → de keuze voor alle leuningen. Verschillende vormen = een regel per vorm (de eerste houdt de sleutel "leuning").
-    const lVorm = (x) => (B.boomVormen || {})['id:' + String(x.id).split('*')[0]] || (B.leuning.auto ? ZP.parts.vorm(x) || B.leuning.vorm : B.leuning.vorm);
+    const lVorm = (x) => (B.boomVormen || {})['id:' + String(x.id).split('*')[0]] || (B.leuning.auto ? leunVormTekening(p, B, x) : B.leuning.vorm);
     const leunPerVorm = (list) => {
       const vormen = VORMEN.filter(v => list.some(x => lVorm(x) === v)).sort((a, b) => (b === B.leuning.vorm) - (a === B.leuning.vorm));
       if (vormen.length < 2) { const v = vormen[0] || B.leuning.vorm;
@@ -507,7 +535,9 @@ ZP.cost = (function () {
       const b = C.bewerkingen.find(x => x.id === bw.id); if (!b) continue;
       const v = check(C, b.vast, bewKost(C, b), b.vastKost);
       if (bw.optie) { optieBew.push({ bw, b, v }); continue; }
-      line(s3, 'bew:' + bw.key, b.naam, { fixedQty: +bw.n || 0, unit: b.eenheid.replace(/^per /, ''), u: b.u, mat: b.mat, vast: v, extra: { bew: bw },
+      // optie van één trap (Uitvoering, "Trappen wijken van elkaar af"): trapnaam erbij als het project meer trappen heeft
+      const trapN = bw.trap && p.stairs.length > 1 ? (p.stairs.find(s => s.id === bw.trap) || {}).name : '';
+      line(s3, 'bew:' + bw.key, b.naam + (trapN ? ' – ' + trapN : ''), { fixedQty: +bw.n || 0, unit: b.eenheid.replace(/^per /, ''), u: b.u, mat: b.mat, vast: v, extra: { bew: bw },
         note: b.onderdeel + ' · ' + (v ? `vaste prijs ${eur(v.vast)}` : `kostprijs ${eur(bewKost(C, b))}`) + ' ' + b.eenheid + (bw.parts && bw.parts.length ? ' · op ' + partList(p, bw.parts) : '') });
     }
 
@@ -551,26 +581,37 @@ ZP.cost = (function () {
     }
     const nTr = inc.filter(x => x.type === 'trede').length, nTrap = Math.max(1, p.stairs.reduce((a, s) => a + ZP.parts.aantalVan(s), 0));
     const perMult = { 'per tred': nTr, 'per trap': nTrap, 'per m leuning': leunTot, 'per spijl': nSpijl, 'per stuk': 0 };
-    // gekozen leuningdrager vervangt de standaard muurleuninghouder uit het beslag
-    const dr = B.drager && (C.dragers || []).find(d => d.id === B.drager.id);
+    // gekozen leuningdrager vervangt de standaard muurleuninghouder uit het beslag.
+    // Trappen wijken van elkaar af (trappenApart): per trap B.dragerTrap[sid] = {id ('' = zoals het project, 'std' = standaard houder), kanten}
+    const apartT = trappenApart(p), drP = B.drager || null;
+    const drVan = (sid) => { const o = apartT && sid ? (B.dragerTrap || {})[sid] : null;
+      const id = o && o.id ? (o.id === 'std' ? '' : o.id) : (drP && drP.id) || '';
+      return { id: (C.dragers || []).some(d => d.id === id) ? id : '', kanten: o && o.kanten ? o.kanten : (drP && drP.kanten) || null }; };
+    const dr = drP && (C.dragers || []).find(d => d.id === drP.id);
     // aantal dragers per getekend leuningstuk (regel gebruiker): tot 1,70 m 2, tot 3 m 3, langer ±70 cm onderling (minimaal 4)
     const dragersVoor = (m) => (m <= 0 ? 0 : m <= 1.7 ? 2 : m <= 3 ? 3 : Math.max(4, Math.round(m / 0.7)));
     // alleen een muurleuning krijgt dragers; een leuning op een balustrade niet (regel gebruiker).
     // Muur of vrij per kant: gekozen drager-kanten → keuze per kant (leuningKant) → balusters aan die kant in de tekening = vrij.
     // Leuning zonder kant: muur als er geen balusters getekend zijn. Extra leuningen (B.leun, bv. een muurleuning) = muur.
     const balKant = (side) => inc.some(x => x.type === 'baluster' && x.side === side);
-    const isMuur = (x) => (!x.side ? !inc.some(y => y.type === 'baluster') : B.drager && B.drager.kanten ? B.drager.kanten.includes(x.side) : lk[x.side] ? lk[x.side].plaats === 'muur' : !balKant(x.side));
-    const stukken = [...leunParts.filter(isMuur).map(x => ({ side: x.side, m: x.L / 1000 })), ...B.leun.map(l => ({ side: null, m: +l.m || 0 }))].filter(x => x.m > 0);
+    const isMuur = (x) => { const k = drVan(x.stair).kanten; return !x.side ? !inc.some(y => y.type === 'baluster') : k ? k.includes(x.side) : lk[x.side] ? lk[x.side].plaats === 'muur' : !balKant(x.side); };
+    const stukken = [...leunParts.filter(isMuur).map(x => ({ side: x.side, m: x.L / 1000, d: drVan(x.stair) })), ...B.leun.map(l => ({ side: null, m: +l.m || 0, d: drVan('') }))].filter(x => x.m > 0);
     const telDragers = (list) => list.reduce((a, x) => a + dragersVoor(x.m), 0);
     const dragerUitleg = 'per leuningstuk: tot 1,70 m 2, tot 3 m 3, langer ±70 cm onderling';
-    // welke stukken: leuning aan de muurkant(en) uit de tekening; zonder kant in de tekening het deel van alle leuning
-    const muurKant = B.drager && B.drager.kanten && leunParts.some(x => x.side);
-    if (dr) line(s4, 'drager', 'Leuningdragers – ' + dr.naam, { qty: muurKant ? telDragers(stukken.filter(x => B.drager.kanten.includes(x.side))) : telDragers(stukken), unit: 'stuks', mat: +dr.prijs || 0, extra: { drager: B.drager },
-      note: dragerUitleg + ', alleen de muurleuning (leuning op een balustrade heeft geen dragers)' });
+    // welke stukken krijgen een gekozen drager: leuning aan de muurkant(en) uit de tekening; zonder kant in de tekening alle muurleuning
+    const heeftKant = leunParts.some(x => x.side), metDrager = (x) => !(x.d.kanten && heeftKant) || x.d.kanten.includes(x.side);
+    // per soort drager één regel (de keuze van het project houdt de sleutel "drager"; een andere soort van een trap: drager:<id>)
+    const soorten = [...new Set([...(dr ? [dr.id] : []), ...stukken.filter(x => x.d.id).map(x => x.d.id)])].sort((a, b) => (b === (dr && dr.id)) - (a === (dr && dr.id)));
+    for (const id of soorten) { const d = C.dragers.find(x => x.id === id), proj = dr && id === dr.id;
+      const trappen = apartT ? [...new Set(leunParts.filter(x => drVan(x.stair).id === id).map(x => (p.stairs.find(s => s.id === x.stair) || {}).name).filter(Boolean))] : [];
+      line(s4, proj ? 'drager' : 'drager:' + id, 'Leuningdragers – ' + d.naam, { qty: telDragers(stukken.filter(x => x.d.id === id && metDrager(x))), unit: 'stuks', mat: +d.prijs || 0, extra: { drager: proj ? B.drager : { id } },
+        note: dragerUitleg + ', alleen de muurleuning (leuning op een balustrade heeft geen dragers)' + (trappen.length && soorten.length > 1 ? ' · ' + trappen.join(', ') : '') }); }
+    // stukken zonder gekozen drager: standaard muurleuninghouder uit het beslag
+    const zonder = stukken.filter(x => !x.d.id);
     for (const s of C.beslag) {
-      if (dr && /muurleuninghouder/i.test(s.naam)) continue;
       const houder = /muurleuninghouder/i.test(s.naam) && s.per === 'per m leuning';
-      const auto = houder ? telDragers(stukken) : Math.round(s.std * (perMult[s.per] || 0) * 10) / 10;
+      if (/muurleuninghouder/i.test(s.naam) && (houder ? (stukken.length ? !zonder.length : !!dr) : dr)) continue;
+      const auto = houder ? telDragers(zonder) : Math.round(s.std * (perMult[s.per] || 0) * 10) / 10;
       if (!auto && !(B.qty['bs:' + s.id] > 0)) continue;
       line(s4, 'bs:' + s.id, s.naam, { qty: auto, unit: s.eenheid, mat: s.prijs, note: houder ? dragerUitleg + ', alleen de muurleuning' : `${s.std} ${s.per}` });
     }
@@ -766,5 +807,5 @@ ZP.cost = (function () {
   function normHerstel(C, lijst) { for (const [pad, v] of lijst) { const r = normRef(C, pad), e = (C.normBron || {})[pad]; if (!r || !e) continue; e.excel = r[0][r[1]] === undefined ? null : r[0][r[1]]; r[0][r[1]] = v; } }
   const normBronVan = (C, pad) => (C.normBron || {})[pad] || null;
 
-  return { afwGemeten, normGet, normSet, normTerug, normBewaar, normHerstel, normBronVan, NS, houtFactor, defaults, ensure, TRAPTYPES, VORMEN, PROFIELEN, STATUS, tredeU, tredeSoortU, afwU, afwVanStuk, afwVanPart, geenAfw, isVerdreven, boomU, boomTredU, leuningU, bewKost, afwMat, afwPrijs, leuningPerM, leunKey, leunHoutVan, balRegel, balVloerVan, balEffectief, balustradePerM, balStdVan, balStdPrijs, check, signalen, setVast, guessType, begroting, importXlsx, uid };
+  return { afwGemeten, normGet, normSet, normTerug, normBewaar, normHerstel, normBronVan, NS, houtFactor, defaults, ensure, TRAPTYPES, VORMEN, PROFIELEN, STATUS, tredeU, tredeSoortU, afwU, afwVanStuk, afwVanPart, geenAfw, isVerdreven, boomU, boomTredU, leuningU, bewKost, afwMat, afwPrijs, leuningPerM, leunKey, leunHoutVan, balRegel, trappenApart, stukVorm, leunVormTekening, balVloerVan, balEffectief, balustradePerM, balStdVan, balStdPrijs, check, signalen, setVast, guessType, begroting, importXlsx, uid };
 })();

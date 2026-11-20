@@ -12,16 +12,24 @@ function scrWood() {
   // houtsoort per onderdeelsoort (bv. treden in beuken, bomen en leuningen in eiken)
   // keuze: een materiaalsoort uit de materialenlijst, bv. "Rustiek eiken" of "Eiken foutvrij"
   // een hele houtsoort (alle plank soorten mogen) of één plank soort ("Rustiek eiken › Panelen 40 mm")
-  const matOpts = houtMatOpts;
+  // houtsoort per onderdeelsoort: alleen een overzicht (kiezen gebeurt op één plek: Uitvoering → Per onderdeel / per trap / per kant / per stuk)
   const presentTypes = [...new Set(p.parts.filter(x => x.include).map(x => x.type))].sort((a, b) => P.TYPES[a].order - P.TYPES[b].order);
+  const apart = uvApart(p), mat = (x) => N.materialOf(x, st, p.typeMaterial || {});
+  // gekozen hout per soort, samengevat: één waarde, of per trap (vinkje "Trappen wijken af") en/of per kant
+  const houtTekst = (lijst) => {
+    const een = (l) => { const s = new Set(l.map(mat)); return s.size === 1 ? [...s][0] : null; };
+    if (een(lijst)) return esc(een(lijst));
+    const perKant = (l, voor) => { const zijden = [...new Set(l.map(x => x.side || ''))];
+      return zijden.map(z => { const lz = l.filter(x => (x.side || '') === z); return `<b>${esc([voor, z.toLowerCase()].filter(Boolean).join(' ') || 'overig')}</b> ${esc([...new Set(lz.map(mat))].join(' / '))}`; }); };
+    if (!apart) return perKant(lijst, '').join(' · ');
+    return p.stairs.flatMap(s => { const l = lijst.filter(x => x.stair === s.id); if (!l.length) return [];
+      return een(l) ? [`<b>Trap ${stairCode(p, s.id)}</b> ${esc(een(l))}`] : perKant(l, 'Trap ' + stairCode(p, s.id)); }).join(' · ');
+  };
+  const eigenStuk = (lijst) => lijst.filter(x => (p.typeMaterial || {})['id:' + String(x.id).split('*')[0]]).length;
   const typeRows = presentTypes.map(t => {
-    const drawn = [...new Set(p.parts.filter(x => x.include && x.type === t).map(x => M.canonMaterial(x.material, st.materialMap) || '(onbekend)'))].join(' / ');
-    const cur = (p.typeMaterial || {})[t] || '';
-    const th = [...new Set(p.parts.filter(x => x.include && x.type === t).map(x => x.thickness))].join(' / ');
-    // keuzes per kant/vlucht (uit de configurator) gaan voor de keuze per soort: laten zien
-    const perKant = Object.entries(p.typeMaterial || {}).filter(([k]) => k.startsWith(t + '|'));
-    return `<tr><th><span class="tdot t-${t}"></span>${P.TYPES[t].label}</th><td class="muted">${th} mm</td><td><select data-bind="typemat" data-v="${t}">
-      <option value="">volgens tekening (${esc(drawn)})</option>${matOpts(cur)}</select>${perKant.length ? `<div class="small hout-perkant">Per kant: ${perKant.map(([k, w]) => `<b>${esc(k.split('|').slice(1).join(' vlucht '))}</b> ${esc(w)}`).join(' · ')} <span class="muted">(gaat voor; een keuze hier vervangt dit)</span></div>` : ''}</td></tr>`;
+    const lijst = p.parts.filter(x => x.include && x.type === t), ne = eigenStuk(lijst);
+    const th = [...new Set(lijst.map(x => x.thickness))].join(' / ');
+    return `<tr><th><span class="tdot t-${t}"></span>${P.TYPES[t].label}</th><td class="muted">${th} mm</td><td class="hout-keuze">${houtTekst(lijst)}${ne ? ` <span class="muted small">(${ne} ${ne === 1 ? 'stuk' : 'stuks'} met een eigen keuze)</span>` : ''}</td></tr>`;
   }).join('');
   const cards = groups.map(g => {
     const cfg = p.groupCfg[g.key] || {};
@@ -58,10 +66,10 @@ function scrWood() {
   const k = st.kerf;
   const KLAB = { trede: 'Treden', lamel: 'Lamellen', stootbord: 'Stootborden', trapboom: 'Trapbomen', keepboom: 'Keepbomen', leuning: 'Leuningen', spil: 'Spillen', baluster: 'Balusters', bordes: 'Bordes', overig: 'Overig' };
   const num = (path, v, w = 'w4') => `<input class="${w} num" data-bind="set" data-path="${path}" value="${v}">`;
-  return pageHead('Hout', 'Kies de houtsoort per onderdeelsoort en welke maten uit de materialenlijst mogen. De app kiest zelf welke lengtes en breedtes samen het goedkoopst zijn.',
+  return pageHead('Hout', 'Welke maten uit de materialenlijst mogen (de houtsoort kies je bij Uitvoering). De app kiest zelf welke lengtes en breedtes samen het goedkoopst zijn.',
       `<button class="primary" data-act="calc">Indeling berekenen →</button>`) + `
-    <section class="card"><h3>Materiaal per onderdeelsoort</h3>
-      <p class="muted small">Kies per onderdeel uit welke houtsoort het gemaakt wordt, of uit één plank soort daarvan (bv. treden uit "Rustiek eiken › Panelen 40 mm", trapbomen uit "Rustiek eiken"). Onderdelen met hetzelfde hout en dezelfde dikte worden samen ingedeeld en kunnen planken delen; de app kiest zelf de voordeligste lengtes.</p>
+    <section class="card hout-overzicht"><div class="ml-head"><h3>Materiaal per onderdeelsoort</h3><button class="small" data-act="go" data-v="uitvoering">Wijzigen bij Uitvoering →</button></div>
+      <p class="muted small">Zo wordt elk onderdeel gemaakt${apart ? ' (de trappen wijken van elkaar af)' : ''}. Kiezen doe je bij Uitvoering: per onderdeel${p.stairs.length > 1 ? ', per trap' : ''}, per kant of per stuk; daar kun je ook één plank soort kiezen (bv. "Rustiek eiken › Panelen 40 mm"). Onderdelen met hetzelfde hout en dezelfde dikte worden samen ingedeeld en kunnen planken delen.</p>
       <table class="tbl compact typemat"><tbody>${typeRows}</tbody></table></section>
     <h2 class="sect">Groepen <span class="muted small">hout + dikte · vink maten uit die je voor dit project niet wilt gebruiken</span></h2>
     ${cards || '<p class="muted">Geen onderdelen.</p>'}

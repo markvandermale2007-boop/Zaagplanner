@@ -1,7 +1,7 @@
 // Opstelling: de ingelezen trappen (3D uit de DXF) in één woning zetten – per trap een plaats, draaiing en vloerhoogte,
 // zodat bv. de verdiepingstrap en de zoldertrap boven elkaar staan – met vloeren (trapgat), wanden en balustrades.
 // Data per project: p.opstelling = { trappen{stairId:{x,y,z,rot}}, vloeren[{id,naam,z,gat{x,y,bx,by,punten?}|null}],
-//   wanden[{id,vloer,a:[x,y],b:[x,y],h,d,kleur}], balustrades[{id,vloer,punten[],spijl,tussen,onderslof}], wandKleur }.
+//   wanden[{id,vloer,a:[x,y],b:[x,y],h,hb,za,zb,d,zijde,kleur}] (zijde: zie wandVorm), balustrades[{id,vloer,punten[],spijl,tussen,onderslof}], wandKleur }.
 // Plattegrond (raster) in mm met y omlaag, zoals de stap Verdiepingen van de configurator; 3D: X = x, Y = −y, Z = hoogte.
 ZP.ops = (function () {
   let seq = 0;
@@ -52,6 +52,72 @@ ZP.ops = (function () {
     const parts = metMesh(p, sid), T = trafo(parts, t);
     return parts.filter(x => x.type === 'trede' || x.type === 'bordes').map(x => { const pts = []; for (let i = 0; i < x.mesh.length; i += 3) pts.push(T.raster(x.mesh[i], x.mesh[i + 1])); return hull(pts); });
   }
+  // ---------- wanden: de getekende lijn a→b is één vlak van de wand; w.zijde = aan welke kant de wand ligt ----------
+  // +1 = links van a→b in het raster (normaal [−uy, ux]), −1 = rechts, 0 = midden op de lijn (oud). Langs een trap ligt de lijn
+  // tegen het buitenvlak van de trap-/keepboom en de wand aan de buitenkant: een wand staat altijd tegen de boom, nooit erin.
+  const wandRicht = (w) => { const dx = w.b[0] - w.a[0], dy = w.b[1] - w.a[1], L = Math.hypot(dx, dy); return L < 1 ? null : { L, ux: dx / L, uy: dy / L, nx: -dy / L, ny: dx / L }; };
+  const wandZ = (w) => { const za = +w.za || 0, zb = w.zb == null ? za : +w.zb || 0, h = +w.h || 2600, hb = w.hb == null ? h : +w.hb || h; return { za, zb, h, hb }; };
+  // punten (raster) van de houten trapdelen; leuning en balusters niet (een muurleuning zit juist tegen de wand)
+  function trapRaster(p, sid, t, cache) {
+    if (cache && cache.has(sid)) return cache.get(sid);
+    const all = metMesh(p, sid), T = all.length ? trafo(all, t) : null, pts = [];
+    if (T) for (const x of all) if (x.type !== 'leuning' && x.type !== 'baluster') for (let i = 0; i < x.mesh.length; i += 3) pts.push(T.raster(x.mesh[i], x.mesh[i + 1]));
+    const r = T ? pts : null; if (cache) cache.set(sid, r); return r;
+  }
+  // wand w tegen de trap leggen als hij erlangs loopt (binnen 300 mm van het buitenvlak, of erin): lijn verschuiven naar het
+  // buitenvlak, zijde = weg van de trap. Geeft de zijde (±1), 0 = geen trap langs deze wand, null = mesh ontbreekt (later opnieuw).
+  function wandLangsTrap(p, w, cache) {
+    const o = p.opstelling, R = wandRicht(w); if (!o || !R) return 0;
+    const vl = o.vloeren.find(v => v.id === w.vloer) || { z: 0 }, Z = wandZ(w);
+    const z0 = vl.z + Math.min(Z.za, Z.zb), z1 = vl.z + Math.max(Z.za + Z.h, Z.zb + Z.hb);
+    let n = 0, som = 0, mx = -Infinity, mn = Infinity, mist = false;
+    for (const [sid, t] of Object.entries(o.trappen || {})) {
+      if (!(p.stairs || []).some(s => s.id === sid)) continue;
+      const tz = t.z || 0; if (Math.min(z1, tz + (t.h || 0)) - Math.max(z0, tz) < 100) continue;   // trap en wand niet op dezelfde hoogte
+      const pts = trapRaster(p, sid, t, cache); if (!pts) { mist = true; continue; }
+      for (const q of pts) {
+        const ex = q[0] - w.a[0], ey = q[1] - w.a[1], a = ex * R.ux + ey * R.uy, s = ex * R.nx + ey * R.ny;
+        if (a < -50 || a > R.L + 50 || Math.abs(s) > 600) continue;
+        n++; som += s; if (s > mx) mx = s; if (s < mn) mn = s;
+      }
+    }
+    if (!n) { if (mist) return null; if (w.zijde === undefined) w.zijde = 0; return 0; }
+    const zijde = som / n < 0 ? 1 : -1, schuif = zijde > 0 ? mx : mn;   // buitenvlak van de trap aan de kant van de wand
+    if (Math.abs(schuif) > 300) { if (w.zijde === undefined) w.zijde = 0; return 0; }
+    const sx = R.nx * schuif, sy = R.ny * schuif, oudA = w.a, oudB = w.b;
+    w.a = [Math.round(w.a[0] + sx), Math.round(w.a[1] + sy)]; w.b = [Math.round(w.b[0] + sx), Math.round(w.b[1] + sy)]; w.zijde = zijde;
+    // aansluitende wanden (eindpunt op het oude begin/eind) gaan mee: hun eindpunt naar het snijpunt met de verschoven lijn
+    for (const x of o.wanden || []) if (x !== w && x.vloer === w.vloer) for (const k of ['a', 'b']) {
+      const oud = [oudA, oudB].find(q => Math.hypot(q[0] - x[k][0], q[1] - x[k][1]) < 2); if (!oud) continue;
+      const Q = wandRicht(x), nieuw = oud === oudA ? w.a : w.b;
+      const kr = Q ? R.ux * Q.uy - R.uy * Q.ux : 0;
+      if (Math.abs(kr) < 0.34) { x[k] = nieuw.slice(); continue; }
+      // snijpunt van de lijn van x met de verschoven lijn van w
+      const ex = w.a[0] - x.a[0], ey = w.a[1] - x.a[1], r = (ex * R.uy - ey * R.ux) / (Q.ux * R.uy - Q.uy * R.ux);
+      x[k] = [Math.round(x.a[0] + Q.ux * r), Math.round(x.a[1] + Q.uy * r)];
+    }
+    return zijde;
+  }
+  // grondvorm van een wand in het raster: [begin binnen, eind binnen, eind buiten, begin buiten]; bij een hoek met een andere wand
+  // (eindpunten binnen 150 mm) lopen beide randen door tot de verste rand van die wand, zodat de hoek dicht is
+  function wandVorm(o, w) {
+    const R = wandRicht(w); if (!R) return null;
+    const rand = (x) => { const d = +x.d || 100, z = +x.zijde || 0, s0 = z > 0 ? 0 : z < 0 ? -d : -d / 2; return [s0, s0 + d]; };
+    const [s0, s1] = rand(w), d = +w.d || 100;
+    const buur = (P) => (o.wanden || []).find(x => x !== w && x.vloer === w.vloer && wandRicht(x) && (Math.hypot(x.a[0] - P[0], x.a[1] - P[1]) < 150 || Math.hypot(x.b[0] - P[0], x.b[1] - P[1]) < 150));
+    const cr = (a0, a1, b0, b1) => a0 * b1 - a1 * b0;
+    const eind = (P, t0, groot) => {
+      const x = buur(P); if (!x) return [t0, t0];
+      const Q = wandRicht(x), k = cr(R.ux, R.uy, Q.ux, Q.uy); if (Math.abs(k) < 0.34) return [t0, t0];   // (bijna) in elkaars verlengde
+      const [r0, r1] = rand(x);
+      return [s0, s1].map(s => {
+        const ts = [r0, r1].map(r => { const bx = x.a[0] + Q.nx * r - (w.a[0] + R.nx * s), by = x.a[1] + Q.ny * r - (w.a[1] + R.ny * s); return cr(bx, by, Q.ux, Q.uy) / k; });
+        const t = groot ? Math.max(...ts) : Math.min(...ts); return Math.abs(t - t0) <= 2 * (d + (+x.d || 100)) ? t : t0;
+      });
+    };
+    const ta = eind(w.a, 0, false), tb = eind(w.b, R.L, true), pt = (t, s) => [w.a[0] + R.ux * t + R.nx * s, w.a[1] + R.uy * t + R.ny * s];
+    return { vlak: [pt(ta[0], s0), pt(tb[0], s0), pt(tb[1], s1), pt(ta[1], s1)], R, midden: (s0 + s1) / 2 };
+  }
   const VLOERNAMEN = ['Begane grond', '1e verdieping', '2e verdieping', 'Zolder', '4e verdieping'];
   // standaard: trappen boven elkaar op dezelfde plaats; per trap bovenaan een vloer met een trapgat ter grootte van de trap
   function ensure(p) {
@@ -71,6 +137,8 @@ ZP.ops = (function () {
       }
     }
     o.vloeren.sort((a, b) => a.z - b.z);
+    // oudere wanden (midden op de lijn, zonder zijde): één keer tegen de trap leggen zodra de meshes er zijn
+    if (o.wanden.some(w => w.zijde === undefined)) { const c = new Map(); for (const w of o.wanden) if (w.zijde === undefined) wandLangsTrap(p, w, c); }
     return o;
   }
   // keldervloer: één vloer onder de begane grond (negatief peil); de trap naar de kelder komt uit in de begane grond (daar het trapgat)
@@ -155,5 +223,5 @@ ZP.ops = (function () {
     return { trappen: tr };
   }
 
-  return { groepen, stapel, ROT, rotXY, metMesh, trappenMetMesh, box, peilen, hoogte, trafo, naar3d, hull, voetafdruk, ensure, gatHoeken, gatVolgensTrap, lengte, naarBegroting, uid, kelder, kelderErbij, kelderWeg, trapNaarPeil };
+  return { wandLangsTrap, wandVorm, wandZ, groepen, stapel, ROT, rotXY, metMesh, trappenMetMesh, box, peilen, hoogte, trafo, naar3d, hull, voetafdruk, ensure, gatHoeken, gatVolgensTrap, lengte, naarBegroting, uid, kelder, kelderErbij, kelderWeg, trapNaarPeil };
 })();
