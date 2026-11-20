@@ -277,9 +277,10 @@ ZP.timer = (function () {
       const t = T.trap(ui.pid, ui.sid), stukken = T.stukkenVan(t, ui.ond), w = W().werkVan(ui.ond, ui.werk);
       const zwaar = stukken.filter(s => s.k && (s.k.soort === 'Verdreven' || s.k.vorm === 'Gebogen')).length;
       const leg = ui.ond === 'trede' ? `<span class="t-leg"><i class="g"></i>recht <i class="o"></i>verdreven${zwaar ? ' (' + zwaar + ')' : ''}</span>` : BOMEN.includes(ui.ond) || ui.ond === 'leuning' ? `<span class="t-leg"><i class="g"></i>recht <i class="o"></i>gebogen</span>` : '';
-      return kop(esc(w.t) + ' – welke stukken?', 'werk') + balkLoopt() + `<main class="tm"><div class="t-selbalk"><button data-a="selalle">Alles</button><button data-a="selrest">Nog niet klaar</button><button data-a="selniets">Niets</button>${leg}</div>
+      // stukken kies je pas na afloop (ui.na, na "Klaar") of bij achteraf invullen: je weet pas achteraf wat je gedaan hebt
+      return kop(esc(w.t), ui.na ? 'naklok' : 'werk') + (ui.na ? '' : balkLoopt()) + `<main class="tm"><p class="t-sub"><b>Welke stukken heb je gedaan?</b></p><div class="t-selbalk"><button data-a="selalle">Alles</button><button data-a="selrest">Nog niet klaar</button><button data-a="selniets">Niets</button>${leg}</div>
         <div class="t-stukken">${stukken.map(stukTegel).join('')}</div></main>
-        <div class="t-onder"><button class="t-groot t-start" data-a="startnu" ${ui.sel.length ? '' : 'disabled'}>${ui.achteraf ? 'Verder' : '▶ Start'} · ${ui.sel.length} stuk${ui.sel.length === 1 ? '' : 's'}</button></div>`;
+        <div class="t-onder"><button class="t-groot t-start" data-a="startnu" ${ui.sel.length ? '' : 'disabled'}>Verder · ${ui.sel.length} stuk${ui.sel.length === 1 ? '' : 's'}</button></div>`;
     }
     function scrKlok() {
       const l = st().loopt; if (!l) { ui.scherm = 'projecten'; return scrProjecten(); }
@@ -302,7 +303,7 @@ ZP.timer = (function () {
       const tijdVeld = ui.achteraf ? `<div class="t-rij2"><label class="tl">Datum<input type="date" id="t-dat" value="${inv.datum}"></label><label class="tl">Begonnen<input type="time" id="t-van" value="${inv.van}"></label></div>
           <label class="tl">Gewerkt (uren:minuten, zonder pauzes)<input id="t-duur" inputmode="numeric" placeholder="1:30" value="${esc(inv.duur || '')}"></label>`
         : `<p class="t-tijd">Gewerkt: <b>${duurKort(inv.seconden)}</b> (${tijd(inv.start)}–${tijd(inv.eind)})</p>`;
-      return kop('Hoeveel ' + eenh + '?', ui.achteraf ? 'stukkenterug' : '') + `<main class="tm">${tijdVeld}
+      return kop('Hoeveel ' + eenh + '?', ui.achteraf || ui.na ? 'stukkenterug' : '') + `<main class="tm">${tijdVeld}
         <div class="t-teller"><button data-a="min">−</button><input id="t-tot" inputmode="decimal" value="${getal(inv.totaal)}"><button data-a="plus">+</button></div>
         ${v.stuks && ui.inv.b.ond === 'trede' ? `<p class="t-sub">${v.verdreven} verdreven van ${v.stuks} treden (uit de tekening)</p>` : v.stuks && v.verdreven ? `<p class="t-sub">${v.verdreven} gebogen van ${v.stuks}</p>` : ''}
         ${groepen}
@@ -361,7 +362,8 @@ ZP.timer = (function () {
       switch (a) {
         case 'terug':
           if (v === 'stukkenterug') { ui.scherm = W().WERK[ui.inv.b.ond].los ? 'werk' : 'stukken'; break; }
-          if (!v) { const l = st().loopt; if (l && l.eind) { delete l.eind; T.bewaar(); } ui.scherm = l ? 'klok' : 'projecten'; break; }
+          if (v === 'naklok') ui.na = false;
+          if (!v || v === 'naklok') { const l = st().loopt; if (l && l.eind) { delete l.eind; T.bewaar(); } ui.scherm = l ? 'klok' : 'projecten'; break; }
           ui.scherm = v; break;
         case 'achteraftwijfel': ui.achteraf = false; break;
         case 'koppel': {
@@ -381,21 +383,23 @@ ZP.timer = (function () {
         case 'werk': {
           ui.werk = v;
           const t = T.trap(ui.pid, ui.sid);
-          if (W().WERK[ui.ond].los || !T.stukkenVan(t, ui.ond).length) { ui.sel = []; return beginWerk(); }
-          ui.sel = T.standaardSel(ui.pid, ui.sid, ui.ond, ui.werk); ui.scherm = 'stukken'; break;
+          ui.sel = []; ui.na = false;
+          // timer: meteen starten; stukken pas na "Klaar". Achteraf invullen: nu kiezen.
+          if (!ui.achteraf || W().WERK[ui.ond].los || !T.stukkenVan(t, ui.ond).length) return beginWerk();
+          ui.scherm = 'stukken'; break;
         }
         case 'stuk': ui.sel = ui.sel.includes(v) ? ui.sel.filter(x => x !== v) : ui.sel.concat([v]); break;
         case 'selalle': ui.sel = T.stukkenVan(T.trap(ui.pid, ui.sid), ui.ond).map(s => s.id); break;
         case 'selniets': ui.sel = []; break;
         case 'selrest': ui.sel = T.standaardSel(ui.pid, ui.sid, ui.ond, ui.werk); break;
-        case 'startnu': return beginWerk();
+        case 'startnu': if (ui.na && st().loopt) return naarAantal(Object.assign({}, st().loopt, { stukken: ui.sel.slice() }), false); return beginWerk();
         case 'naarklok': ui.scherm = 'klok'; break;
         case 'pauze': T.pauze(); break;
         case 'hervat': T.hervat(); break;
         case 'nogbezig': T.nogBezig(); break;
-        case 'stopom': { const l = st().loopt, [u, m] = (root.querySelector('#t-stopom').value || '').split(':').map(Number), d = new Date(l.start); d.setHours(u || 0, m || 0, 0, 0); if (d.getTime() < l.start) d.setDate(d.getDate() + 1); T.gestoptOm(d.getTime()); return naarAantal(l, false); }
-        case 'klaar': { const l = st().loopt; if (!l) break; if (!l.eind) { l.eind = Date.now(); if (l.pauzeVan) { l.pauzes.push([l.pauzeVan, l.eind]); l.pauzeVan = null; } T.bewaar(); } return naarAantal(l, false); }
-        case 'annuleer': if (confirm('Deze tijd weggooien? Er wordt niets bewaard.')) { T.annuleer(); meldingWeg(); ui.scherm = 'projecten'; } break;
+        case 'stopom': { const l = st().loopt, [u, m] = (root.querySelector('#t-stopom').value || '').split(':').map(Number), d = new Date(l.start); d.setHours(u || 0, m || 0, 0, 0); if (d.getTime() < l.start) d.setDate(d.getDate() + 1); T.gestoptOm(d.getTime()); return naKlaar(l); }
+        case 'klaar': { const l = st().loopt; if (!l) break; if (!l.eind) { l.eind = Date.now(); if (l.pauzeVan) { l.pauzes.push([l.pauzeVan, l.eind]); l.pauzeVan = null; } T.bewaar(); } return naKlaar(l); }
+        case 'annuleer': if (confirm('Deze tijd weggooien? Er wordt niets bewaard.')) { T.annuleer(); meldingWeg(); ui.na = false; ui.scherm = 'projecten'; } break;
         case 'min': case 'plus': leesAantal(); { const w = T.voorstel(ui.inv.b).w, stap = w.per === 'm' ? 0.5 : 1; ui.inv.totaal = Math.max(0, Math.round(((+ui.inv.totaal || 0) + (a === 'plus' ? stap : -stap)) * 100) / 100); } break;
         case 'bijz': leesAantal(); { const i = ui.inv; i.bijz = i.bijz.includes(v) ? i.bijz.filter(x => x !== v) : i.bijz.concat([v]); i.telt = !i.bijz.some(x => NIET_TELLEN.includes(x)); } break;
         case 'opslaan': {
@@ -408,7 +412,7 @@ ZP.timer = (function () {
           }
           T.opslaan(i.b, Object.assign({}, i, { vanTimer: !ui.achteraf }));
           if (!ui.achteraf) meldingWeg();
-          ui.melding = 'Opgeslagen.'; ui.achteraf = false; ui.pid = i.b.pid; ui.sid = i.b.sid; ui.inv = null; ui.scherm = 'onderdeel';
+          ui.melding = 'Opgeslagen.'; ui.achteraf = false; ui.na = false; ui.pid = i.b.pid; ui.sid = i.b.sid; ui.inv = null; ui.scherm = 'onderdeel';
           teken(); await stuur(); break;
         }
         case 'vandaag': ui.scherm = 'vandaag'; ui.bewerk = null; break;
@@ -440,6 +444,13 @@ ZP.timer = (function () {
       ui.scherm = 'klok'; teken();
     }
 
+    // na "Klaar": eerst kiezen welke stukken er gedaan zijn (als dat onderdeel stukken heeft), dan "Hoeveel?"
+    function naKlaar(l) {
+      const t = T.trap(l.pid, l.sid);
+      if (l.stukken.length || W().WERK[l.ond].los || !T.stukkenVan(t, l.ond).length) return naarAantal(l, false);
+      ui.pid = l.pid; ui.sid = l.sid; ui.ond = l.ond; ui.werk = l.werk; ui.sel = []; ui.na = true; ui.scherm = 'stukken'; teken();
+    }
+
     // ---------- klok bijwerken, vergeten timer, verbinding ----------
     let gemeld = false;
     setInterval(() => {
@@ -449,7 +460,7 @@ ZP.timer = (function () {
     }, 1000);
     addEventListener('online', () => { ui.online = true; vernieuw(); });
     addEventListener('offline', () => { ui.online = false; teken(); });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { gemeld = false; if (st().loopt && ui.scherm !== 'aantal') ui.scherm = 'klok'; teken(); vernieuw(); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { gemeld = false; if (st().loopt && ui.scherm !== 'aantal' && !(ui.na && ui.scherm === 'stukken')) ui.scherm = 'klok'; teken(); vernieuw(); } });
     setInterval(() => { if (navigator.onLine) stuur().then(teken); }, 60000);
     opstart();
     return { T, ui, teken };
